@@ -95,14 +95,17 @@ static void ui_region(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t bg, v
 }
 static uint32_t ui_rnd_s;                       /* the concepts' random: (s 9301 + 49297) mod 233280 */
 static uint32_t ui_rnd(uint32_t n) { ui_rnd_s = (ui_rnd_s * 9301u + 49297u) % 233280u; return ui_rnd_s * n / 233280u; }
-static char *ui_note(char *s, uint32_t n)       /* a MIDI note's name: "C4", "C#4" (60 = C4) */
+static char *ui_note12(char *s, uint32_t n)     /* a MIDI note's name: "C4", "C#4" (60 = C4) */
 {
     static const char NN[12][3] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
     int32_t o = (int32_t)(n / 12u) - 1;
-    if (tn_on()) return tn_name(s, n);          /* (a TUNING: "3.7") */
     s = put_s(s, NN[n % 12u]);
     if (o < 0) return put_u(put_s(s, "-"), (uint32_t)-o);
     return put_u(s, (uint32_t)o);
+}
+static char *ui_note(char *s, uint32_t n)       /* .. at a TUNING: "3.7" */
+{
+    return tn_on() ? tn_name(s, n) : ui_note12(s, n);
 }
 static char *ui_3(char *s, uint32_t v) { s[0] = (char)('0' + v / 100u % 10u), s[1] = (char)('0' + v / 10u % 10u), s[2] = (char)('0' + v % 10u), s[3] = 0; return s + 3; }
 static uint32_t ui_pc(int32_t v) { return ((uint32_t)clamp(v, 0, 127) * 100u + 63u) / 127u; }
@@ -1550,59 +1553,81 @@ static void pic_pattern(void)                   /* SeqSet: the patterns (A; B ..
     }
 }
 
-static void pic_sel(void)                       /* Scale: the 27 keys as rays of aurora hanging from a ribbon, a key a
-                                                 * ray (black keys shorter): the scale's long and lit, the rest short
-                                                 * and dim, the chord's in the accent, longest; ROOT named under its
-                                                 * rays; the chord of the note last played (none: ROOT's) and its name */
+static void pic_sel(void)                       /* Scale: where each key stands. Above, the twelve normal notes as a
+                                                 * keyboard, drawn to the pitch; under it the 27 keys, a ray a key at its
+                                                 * true pitch: at 12 EDO under its own note, at another TUNING grey on a
+                                                 * normal note, amber over it, sky under it. A key held: white, up into
+                                                 * the keyboard; the note last played and its chord: the accent. Below:
+                                                 * that note by its nearest normal note and the cents off it */
 {
     static const uint8_t BLK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};   /* (from C) */
-    uint32_t base = KEY_BASE(ui_oct), edo = (uint32_t)tn_edo(), r, n, i, k, lit = 0;
+    uint32_t base = KEY_BASE(ui_oct), edo = (uint32_t)tn_edo(), r, n, i, k, lit = 0, held = 0;
     uint8_t ns[CH_MAX];
     char l[32], rg[12], *e;
-    int32_t x, y[55], s;
+    int32_t x, a = tn_anchor(), p0 = a * 16 + ((int32_t)base - a) * 192 / (int32_t)edo, rx0 = PX0 + 4, sm;
     r = ch_last >= (int32_t)base && ch_last < (int32_t)base + 27 ? (uint32_t)ch_last :
-        edo != 12u ? base + (uint32_t)(tn_anchor() + 124 * (int32_t)edo - (int32_t)base) % edo :
+        edo != 12u ? base + (uint32_t)(a + 124 * (int32_t)edo - (int32_t)base) % edo :
         base + (uint32_t)(clamp(sc_root, 0, 11) + 12 - (int32_t)(base % 12u)) % 12u;
-    n = chord_notes(sel, r, ns);
+    if (trk[sel].chord) n = chord_notes(sel, r, ns);
+    else ns[0] = (uint8_t)r, n = 1;
     for (i = 0; i < n; i++)
         if (ns[i] >= base && ns[i] < base + 27u) lit |= 1u << (ns[i] - base);
+    for (i = 0; i < nlat; i++)
+        if (lat_trk[i] == sel && lat_note[i] >= base && lat_note[i] < base + 27u) held |= 1u << (lat_note[i] - base);
     e = put_s(put_s(l, SC_NOTE[clamp(sc_root, 0, 11)]), " ");
     put_s(e, edo != 12u ? TN_NAME[clamp(sc_tuning, 0, NTUNING - 1)] : SC_NAME[clamp(sc_scale, 0, NSCALE - 1)]);
     ui_note(put_s(ui_note(rg, base), "-"), base + 26u);   /* (the keys' range: "F2-G4") */
     ui_caption(l, rg);
-    for (i = 0; i < 55; i++) y[i] = 50 + hw_wave(((uint32_t)i * 3u + hw_ph * 2u) & 255u) * 3 / 64;
+    /* the keyboard: a semitone's cell is edo x 2 / 3 px wide, on its pitch */
+    for (sm = (p0 >= 0 ? p0 / 16 : -((15 - p0) / 16)) - 2;; sm++) {
+        int32_t xc = rx0 + (sm * 16 - p0) * (int32_t)edo / 24, x0 = xc - (int32_t)edo / 3, x1 = xc + (int32_t)edo / 3, pc = (sm % 12 + 12) % 12;
+        uint16_t c = BLK[pc] ? UI_D0 : pc == clamp(sc_root, 0, 11) ? ui_acc : UI_L0;
+        if (x0 > 228) break;
+        x0 = x0 < 12 ? 12 : x0, x1 = x1 > 228 ? 228 : x1;
+        if (x1 >= x0) ui_rect(x0, 44, x1 - x0 + 1 - (edo >= 10u ? 1 : 0), 12, c);
+        if (BLK[pc] && x1 >= x0 && edo >= 10u) ui_rect(x0, 44, x1 - x0, 1, UI_M0);
+    }
     for (k = 0; k < 27u; k++) {
-        uint32_t pc = (base + k) % 12u;
-        int32_t rx = PX0 + 4 + (int32_t)k * 8, in = sc_in((int32_t)(base + k)), ch = (int32_t)(lit >> k & 1u);
-        int32_t blk = edo != 12u ? (base + k + 124u * edo - (uint32_t)tn_anchor()) % edo != 0u : BLK[pc];   /* (a TUNING: ROOT's rays long) */
-        int32_t y0 = y[(rx - PX0) / 4] + 3 + (blk ? 6 : 0), len = ch ? 58 : in ? (blk ? 40 : 50) : 10;
-        int32_t px = rx, py = y0;
-        uint16_t c = ch ? ui_acc : blk ? UI_KC[1] : UI_KC[0];
-        for (s = 4; s <= len; s += 4) {
-            int32_t nx = rx + hw_wave(((uint32_t)(s * 3 + (int32_t)k * 23) + hw_ph * 2u) & 255u) * 3 * s / (64 * 50);
-            uint16_t cc = ui_mix(UI_K, c, (uint32_t)clamp((ch ? 16 : in ? 13 : 4) - s * (ch ? 8 : 9) / (len + 4), 1, 16), 16u);
-            ui_line(px, py, nx, y0 + s, cc);
-            if (in || ch) ui_line(px + 1, py, nx + 1, y0 + s, ui_mix(UI_K, cc, 10, 16));
-            px = nx, py = y0 + s;
+        int32_t rx = rx0 + (int32_t)k * 8, in = sc_in((int32_t)(base + k)), ch = (int32_t)(lit >> k & 1u), hd = (int32_t)(held >> k & 1u);
+        int32_t len = hd || ch ? 44 : in ? 34 : 10, y0 = hd ? 44 : 58;
+        uint16_t c = UI_M0;
+        if (edo != 12u) {
+            int32_t d = tn_x(base + k, (int32_t)edo) & 4095;   /* (off the semitone under it, 1/4096 semitone) */
+            d = d >= 2048 ? d - 4096 : d;
+            c = d > 327 ? BW_AMBER : d < -327 ? BW_SKY : UI_L0;   /* (8 cents) */
+        } else if (in) c = BLK[(base + k) % 12u] ? UI_M0 : UI_L0;
+        if (hd) c = UI_W;
+        else if (ch) c = ui_acc;
+        ui_rect(rx - (hd || ch ? 1 : 0), y0, hd || ch ? 3 : 2, 58 + len - y0, c);
+        if (hd || ch) ui_rect(rx - 2, 58 + len, 5, 5, c);
+    }
+    {   /* the note: its nearest normal note, the cents off it; a chord's name beside */
+        int32_t d = edo != 12u ? tn_x(r, (int32_t)edo) & 4095 : 0;
+        char *q;
+        d = d >= 2048 ? d - 4096 : d;
+        q = ui_note12(l, (uint32_t)((a * 16 + tn_whole(tn_x(r, (int32_t)edo)) + 8) / 16));
+        if (edo != 12u) {
+            int32_t c = (d * 100 + (d >= 0 ? 2048 : -2048)) / 4096;
+            *q++ = ' ', *q++ = c < 0 ? '-' : '+';
+            q = put_s(put_u(q, (uint32_t)(c < 0 ? -c : c)), "c");
+        } else if (trk[sel].chord) chord_name(sel, r, l);
+        x = ui_text(12, 124, l, 2, UI_W) + 8;
+        if (edo != 12u) { if (trk[sel].chord) chord_name(sel, r, l); else tn_name(l, r); }
+        else if (!trk[sel].chord) put_s(l, "CHORD OFF");
+        else {
+            for (i = 0, k = 1; i < n; i++) k &= (uint32_t)sc_in(ns[i]);   /* (all of them in the scale: IN KEY) */
+            put_s(put_u(l, n), n == 1u ? " NOTE" : k && sc_scale > 0 ? " NOTES IN KEY" : " NOTES");
         }
-        if (ch) ui_rect(px - 2, py, 5, 5, ui_acc);
-        if (edo != 12u ? !blk : (int32_t)pc == clamp(sc_root, 0, 11)) ui_text(rx - 4 * (int32_t)ui_len(SC_NOTE[clamp(sc_root, 0, 11)]) + 1, 112, SC_NOTE[clamp(sc_root, 0, 11)], 1, UI_L);
+        if (x + 8 * ui_len(l) <= 228) ui_text(x, 128, l, 1, UI_M);
     }
-    ui_glow(PX0, 4, y, 55, UI_KC[0]);
-    chord_name(sel, r, l);
-    x = ui_text(12, 124, l, 2, trk[sel].chord ? ui_acc : UI_M) + 8;
-    if (!trk[sel].chord) put_s(l, "OFF: HOLD SEL");
-    else {
-        for (i = 0, k = 1; i < n; i++) k &= (uint32_t)sc_in(ns[i]);   /* (all of them in the scale: IN KEY) */
-        put_s(put_s(put_u(l, n), n == 1u ? " NOTE" : " NOTES"), k && sc_scale > 0 && edo == 12u ? " IN KEY" : "");
+    if (edo != 12u) {
+        ui_rect(12, 147, 6, 6, UI_L0), ui_text(22, 146, "ON", 1, UI_M);
+        ui_rect(50, 147, 6, 6, BW_AMBER), ui_text(60, 146, "HIGH", 1, UI_M);
+        ui_rect(104, 147, 6, 6, BW_SKY), ui_text(114, 146, "LOW", 1, UI_M);
+    } else {
+        ui_rect(12, 147, 6, 6, UI_L0), ui_text(22, 146, "IN SCALE", 1, UI_M);
     }
-    if (x + 8 * ui_len(l) > 228) {              /* (a long name: the short of it) */
-        if (trk[sel].chord) put_s(put_u(l, n), " NOTES");
-        else put_s(l, "OFF");
-    }
-    ui_text(x, 128, l, 1, UI_M);
-    ui_rect(12, 147, 6, 6, UI_KC[0]), ui_text(22, 146, "IN SCALE", 1, UI_M);
-    ui_rect(98, 147, 6, 6, ui_acc), ui_text(108, 146, "CHORD", 1, UI_M);
+    ui_rect(edo != 12u ? 150 : 98, 147, 6, 6, UI_W), ui_text(edo != 12u ? 160 : 108, 146, "PLAYED", 1, UI_M);
 }
 
 static void pic_arp(void)                       /* Arp: what it holds; its steps (13 at most) as standing ribbons of
@@ -2003,7 +2028,10 @@ static uint32_t ui_pic_key(void)
             UI_H(trk[t].ftype), UI_H(trk[t].fpos);
     UI_H(trk[sel].fm_alg), UI_H(trk[sel].fm_fb), UI_H(fm_op), UI_H(trk[sel].p[ENG_FM][0]);
     UI_H(trk[sel].latch), UI_H(trk[sel].chord), UI_H(trk[sel].ch_type), UI_H(trk[sel].ch_voice), UI_H(sc_root), UI_H(sc_scale), UI_H(sc_tuning);
-    if (PAGES[page].btn == BTN_SEL) UI_H(ch_last), UI_H(ui_oct);
+    if (PAGES[page].btn == BTN_SEL) {
+        UI_H(ch_last), UI_H(ui_oct), UI_H(nlat);
+        for (uint32_t ih = 0; ih < nlat; ih++) UI_H(lat_note[ih]);
+    }
     UI_H(trk_quiet);
     if (page == PG_PERFORM) {                   /* (V2: GENERATE's tiles too) */
         UI_H(pf_held), UI_H(ge_freeze), UI_H(gen_on), UI_H(gen_flash());

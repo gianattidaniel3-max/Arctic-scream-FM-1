@@ -217,6 +217,9 @@ North Sami names.
   **OCT** still moves a real octave. **ROOT** in the third octave keeps its normal pitch. SCALE works at 12 EDO only.
   Notes show as octave.step from ROOT: **3.7** is seven steps over ROOT in octave 3. Chords use each interval's nearest
   step. Notes sent out over MIDI stay plain note numbers.
+- **The SCALE screen** shows the twelve normal notes as a keyboard, drawn to the pitch, with one line a key under it, at
+  its true pitch. At a TUNING a line is grey on a normal note (within 8 cents), amber above it, blue below it. A key held
+  is white and reaches into the keyboard. Below: the note played, by its nearest normal note and the cents off it.
 - **CHORD TYPE:** SCALE (the scale's own chord), MIN, MAJ, SUS2, SUS4, FIFTH, MIN7, MAJ7, DIM, ADD9, CLUSTER.
 - **VOICING:** CLOSE, OPEN, SPREAD, +OCT, DROP. Big chords use more of the six voices.
 
