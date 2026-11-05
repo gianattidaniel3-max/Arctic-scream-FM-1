@@ -37,6 +37,7 @@ and release it. For building from scratch see [docs/BUILDING.md](docs/BUILDING.m
   semitone rounding left, through `vc_fine` (`vc_tn` for SAMPLE and VA's second oscillator). 12 EDO runs none of it.
 - Note numbers stay 0..127, a number a step, so sequences, MIDI and saves are unchanged. The saved byte is the song
   block's first spare one (`store.c`, 0 = 12 EDO, so saves at 12 are the same bytes as before).
+- A TUNING's own scales are `SC_NATIVE` (`scale.c`); FIELD is in `note_on` (`grimm.c`). The saved byte after TUNING's holds both.
 - `tests/tuning_test.py` measures the pitches in the audio.
 
 ### Flash chips

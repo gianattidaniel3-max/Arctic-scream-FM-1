@@ -677,6 +677,21 @@ static void note_on(uint32_t t, uint32_t id, uint32_t note, uint32_t src, int ec
         }
         n = m;
     }
+    if (tn_field_on()) {                        /* FIELD: over all the tracks, what sounds sets the field (nothing: this
+                                                 * note); a note of the other takes the next step, in the SCALE if it can */
+        uint32_t f = tn_field(nlat ? lat_note[0] : ns[0]), k, m = 0;
+        for (i = 0; i < n; i++) {
+            uint32_t x = ns[i];
+            if (tn_field(x) != f) {
+                uint32_t lo = x ? x - 1u : 1u, hi = x < 127u ? x + 1u : 126u;
+                x = sc_in((int32_t)lo) || !sc_in((int32_t)hi) ? lo : hi;
+            }
+            for (k = 0; k < m && ns[k] != x; k++)
+                ;
+            if (k == m) ns[m++] = (uint8_t)x;
+        }
+        n = m;
+    }
     if (gs && n > gs) n = gs;                   /* (V2: GENERATE sharing: its chord within its share) */
     for (i = 0; i < n; i++) {
         if (i < no)                             /* its own voice again */
@@ -997,7 +1012,7 @@ static const page_t PAGES[NPAGE] = {
     {"SOURCE", BTN_EDIT, 1, 1, 1, {"SOURCE", "LATCH", "", ""}},
     {"ENV", BTN_ENV, 1, 1, 1, {"ATTACK", "DECAY", "SUSTAIN", "RELEASE"}},
     {"LFO", BTN_LFO, 1, 1, 1, {"RATE", "DEPTH", "DESTINATION", "SHAPE"}},
-    {"SCALE", BTN_SEL, 1, 0, 1, {"ROOT", "SCALE", "TUNING", ""}},
+    {"SCALE", BTN_SEL, 1, 0, 1, {"ROOT", "SCALE", "TUNING", "FIELD"}},
     {"CHORD", BTN_SEL, 1, 0, 1, {"CHORD TYPE", "VOICING", "", ""}},
     {"SONG", BTN_GLO, 1, 0, 1, {"SECTION", "PATTERN", "REPEATS", "MODE"}},
     {"HOME", BTN_HOME, 1, 1, 1, {"VOLUME", "CUTOFF", "WARP", "MORPH"}},   /* (the track's: its LEVEL, its filter,
@@ -1090,7 +1105,7 @@ static volatile int32_t *knob_param(uint32_t pg, uint32_t k)   /* what KNOB k + 
                         &trk[sel].lfo_shape;
     case PG_DRONE: return k == 0u ? &trk[sel].dr_borga : k == 1u ? &trk[sel].dr_storm : k == 2u ? &trk[sel].dr_rise :
                           &trk[sel].latch;
-    case PG_SCALE: return k == 0u ? &sc_root : k == 1u ? &sc_scale : k == 2u ? &sc_tuning : 0;
+    case PG_SCALE: return k == 0u ? &sc_root : k == 1u ? &sc_scale : k == 2u ? &sc_tuning : &sc_field;
     case PG_CHORD: return k == 0u ? &trk[sel].ch_type : k == 1u ? &trk[sel].ch_voice : 0;
     case PG_ARP: return k == 0u ? &trk[sel].arp_mode : k == 1u ? &trk[sel].arp_rate : k == 2u ? &trk[sel].arp_oct :
                         &trk[sel].arp_gate;
@@ -1124,7 +1139,7 @@ static int32_t knob_max(uint32_t pg, uint32_t k)
     return pg == PG_SOUND ? sel_engine()->max[k] : pg == PG_SOURCE ? (k ? 1 : (int32_t)NENG - 1) :
            pg == PG_GRID ? GRID_MAX[k] : pg == PG_PATTERN ? PATT_MAX[k] :
            pg == PG_SOUNDS ? (k == 0u ? SND_N - 1 : k == 1u ? NCAT - 1 : k == 2u ? (int32_t)NENG : 2) :
-           pg == PG_PROJECTS ? 3 : pg == PG_SCALE ? (k == 2u ? NTUNING - 1 : k ? NSCALE - 1 : 11) : pg == PG_CHORD ? (k ? NVOICING - 1 : NCHORD - 1) :
+           pg == PG_PROJECTS ? 3 : pg == PG_SCALE ? (k == 3u ? 1 : k == 2u ? NTUNING - 1 : k ? NSCALE - 1 + (int32_t)sc_native_n() : 11) : pg == PG_CHORD ? (k ? NVOICING - 1 : NCHORD - 1) :
            pg == PG_ARP ? (k == 0u ? NARPMODE - 1 : k == 1u ? NARPRATE - 1 : k == 2u ? 4 : 100) :
            pg == PG_LFO ? (k == 0u ? 127 : k == 1u ? 100 : k == 2u ? NLFODEST - 1 : NLFOSHAPE - 1) :
            pg == PG_DRONE ? (k < 2u ? 100 : k == 2u ? DR_NRISE - 1 : 1) :
@@ -1210,7 +1225,7 @@ static void knob_text(uint32_t pg, uint32_t k, char *s)   /* knob k's value on p
         else if (k == 2u) put_pc(s, v);
         else put_ms(s, 10u * pow2_q16((v * 33) >> 1));
         return;
-    case PG_SCALE: if (k < 3u) put_s(s, k == 2u ? TN_NAME[clamp(v, 0, NTUNING - 1)] : k ? (tn_on() ? "12 EDO ONLY" : SC_NAME[clamp(v, 0, NSCALE - 1)]) : SC_NOTE[clamp(v, 0, 11)]); return;
+    case PG_SCALE: put_s(s, k == 3u ? (!tn_on() || (tn_edo() & 1) ? "EVEN EDO ONLY" : v ? "ON" : "OFF") : k == 2u ? TN_NAME[clamp(v, 0, NTUNING - 1)] : k ? sc_name(sc_now()) : SC_NOTE[clamp(v, 0, 11)]); return;
     case PG_CHORD: if (k < 2u) put_s(s, k ? VC_NAME[clamp(v, 0, NVOICING - 1)] : CH_SHORT[clamp(v, 0, NCHORD - 1)]); return;
     case PG_SONG:
         if (k == 0u || k == 2u) put_u(s, (uint32_t)v + (k ? 0u : 1u));
@@ -1518,7 +1533,7 @@ static void knob_step(uint32_t pg, uint32_t k, int32_t d)   /* KNOB k + 1 on pag
     if (pg == PG_SOUND && k == 0u && sel_eng() == ENG_FM) undo_take(UK_SND | sel, -1);   /* FM's PATCH: its edits) */
     if (pg == PG_SOURCE && k == 0u) set_source(*p + d);
     else if ((pg == PG_SOURCE && k == 1u) || (pg == PG_DRONE && k == 3u)) set_latch(*p + d);
-    else if (pg == PG_GRID && k == 0u && sc_scale > 0) *p = sc_walk(*p, d);   /* (a SCALE: its notes only) */
+    else if (pg == PG_GRID && k == 0u && sc_now() > 0) *p = sc_walk(*p, d);   /* (a SCALE: its notes only) */
     else if (pg == PG_GRID && k == 0u && !*p && d > 0) *p = 60;   /* NOTE from OFF: C4, then on from there */
     else *p = clamp(*p + d, lo, hi);
     if (pg == PG_GRID) grid_put();              /* (the step: its bytes) */
@@ -1836,7 +1851,7 @@ static void seq_tool(uint32_t w, uint32_t base)
         for (m = 2 + (int32_t)tl_rnd(2), j = 0; j < m; j++) {
             seq_step_t *s = &P->st[tl_rnd((uint32_t)n)];
             int32_t dd = (tl_rnd(2) ? 1 : -1) * (1 + (int32_t)tl_rnd(2));
-            if (s->note && tl_rnd(3)) s->note = sc_scale > 0 ? sc_walk(s->note, dd) : clamp(s->note + dd, 1, 127);
+            if (s->note && tl_rnd(3)) s->note = sc_now() > 0 ? sc_walk(s->note, dd) : clamp(s->note + dd, 1, 127);
             else if (s->note) step_off(s);
             else s->note = tl_note(c);
             if (!s->note) step_off(s);

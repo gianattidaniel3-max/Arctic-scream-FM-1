@@ -295,10 +295,10 @@ C("06", "Scales, chords and the arpeggiator", "var(--pink)",
   P("SCALE", "Tap SEL", "scale", K(
     ["ROOT", "The scale's root, shared by all tracks.", "C–B"],
     ["SCALE", "Keys, MIDI and recordings snap to it. The last is HORROR: close semitones, every note wrong in the right way.", "OFF + 14 scales"],
-    ["TUNING", "The octave in equal steps, a key a step; OCT moves a real octave. SCALE works at 12 EDO only.", "5, 7, 10, 12, 14, 15, 16, 17, 19, 22, 24, 31 EDO"],
-    ["", "", ""], ["", "", ""])),
+    ["TUNING", "The octave in equal steps, a key a step; OCT moves a real octave.", "5, 7, 10, 12, 14, 15, 16, 17, 19, 22, 24, 31 EDO"],
+    ["FIELD", "Even EDOs: what sounds together stays in one field (Hába); a note of the other takes the next step.", "OFF, ON"], ["", "", ""])),
   P("CHORD", "Tap SEL twice", "chord", K(
-    ["CHORD TYPE", "The chord a key plays in chord mode.", "SCALE, MIN, MAJ, SUS2, SUS4, FIFTH, MIN7, MAJ7, DIM, ADD9, CLUSTER"],
+    ["CHORD TYPE", "The chord a key plays in chord mode.", "SCALE, MIN, MAJ, SUS2, SUS4, FIFTH, MIN7, MAJ7, DIM, ADD9, CLUSTER, SCALE7, QUART3, QUART4, QUINT, HARM"],
     ["VOICING", "How it is spread. Big chords use more of the six voices.", "CLOSE, OPEN, SPREAD, +OCT, DROP"],
     ["", "", ""], ["", "", ""])),
   P("ARP", "Tap ARP · hold ARP: on / off", "arp", K(

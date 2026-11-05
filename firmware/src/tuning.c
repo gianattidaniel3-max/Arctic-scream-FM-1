@@ -13,6 +13,8 @@ static const uint8_t TN_EDO[NTUNING] = {5, 7, 10, 12, 14, 15, 16, 17, 19, 22, 24
 static const char *const TN_NAME[NTUNING] = {"5 EDO", "7 EDO", "10 EDO", "12 EDO", "14 EDO", "15 EDO", "16 EDO", "17 EDO",
                                              "19 EDO", "22 EDO", "24 EDO", "31 EDO"};
 static volatile int32_t sc_tuning = TN_12;
+static volatile int32_t sc_field;               /* SCALE's FIELD: Alois Haba's rule, on an even EDO the steps of one parity
+                                                 * are a field; what sounds together stays in one (0: off) */
 
 static inline int32_t tn_edo(void) { return TN_EDO[sc_tuning < 0 || sc_tuning >= NTUNING ? TN_12 : sc_tuning]; }
 static inline int tn_on(void) { return tn_edo() != 12; }
@@ -34,6 +36,8 @@ static inline int32_t tn_fine(uint32_t n)
     x = tn_x(n, edo);
     return ((x - tn_whole(x) * 256) * 3787) >> 16;   /* (1/256 of 6.25 cents x 2.367 / 4096 a cent, Q16) */
 }
+static inline int tn_field_on(void) { int32_t e = tn_edo(); return sc_field && e != 12 && !(e & 1); }
+static inline uint32_t tn_field(uint32_t n) { return (uint32_t)((int32_t)n - tn_anchor()) & 1u; }
 /* TUNING's saved form is the number of steps itself: 0 (an older project, the byte spare then) and anything else: 12 */
 static int32_t tn_index(uint32_t edo)
 {

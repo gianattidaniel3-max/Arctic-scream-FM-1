@@ -205,22 +205,31 @@ North Sami names.
 
 **SEL** opens **SCALE → CHORD**. **Hold SEL** (and let go) for chord mode on or off: one key, a whole chord.
 
-| Page | KNOB 1 | KNOB 2 | KNOB 3 |
-|---|---|---|---|
-| SCALE | ROOT (C–B) | SCALE | TUNING |
-| CHORD | CHORD TYPE | VOICING | |
+| Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+|---|---|---|---|---|
+| SCALE | ROOT (C–B) | SCALE | TUNING | FIELD |
+| CHORD | CHORD TYPE | VOICING | | |
 
 - **SCALE**, shared by all tracks: OFF and fourteen scales, the last of them **HORROR**: close semitones, every note
   wrong in the right way. With a scale set, keys, MIDI and recordings snap to it.
 - **TUNING**, shared by all tracks and saved with the project: 12 EDO (normal), or the octave in 5, 7, 10, 14, 15, 16, 17,
   19, 22, 24 or 31 equal steps. Each key is then **one step**, so an octave takes as many keys as the tuning has steps;
-  **OCT** still moves a real octave. **ROOT** in the third octave keeps its normal pitch. SCALE works at 12 EDO only.
+  **OCT** still moves a real octave. **ROOT** in the third octave keeps its normal pitch.
   Notes show as octave.step from ROOT: **3.7** is seven steps over ROOT in octave 3. Chords use each interval's nearest
   step. Notes sent out over MIDI stay plain note numbers.
 - **The SCALE screen** shows the twelve normal notes as a keyboard, drawn to the pitch, with one line a key under it, at
   its true pitch. At a TUNING a line is grey on a normal note (within 8 cents), amber above it, blue below it. A key held
   is white and reaches into the keyboard. Below: the note played, by its nearest normal note and the cents off it.
-- **CHORD TYPE:** SCALE (the scale's own chord), MIN, MAJ, SUS2, SUS4, FIFTH, MIN7, MAJ7, DIM, ADD9, CLUSTER.
+- **Scales at a TUNING:** the fourteen scales use each note's nearest step. 19 EDO adds KLEISMIC, NEGRI, SEMAPHORE, MAGIC
+  and SENSI; 24 EDO adds RAST, BAYATI, SABA, SIKAH and two scales with quarter tones filling whole tones: MIXO ZONES
+  (mixolydian, 2nd to 3rd and 7th to root) and MAJOR ZONES (major, 2nd to 3rd and 6th to 7th).
+- **FIELD**, at even EDOs: Alois Hába's rule. At 24 EDO the twelve normal notes are one field and the twelve quarter tones
+  the other. With FIELD on, what sounds together stays in one field, over all four tracks: the first note sounding sets it,
+  and a note of the other field takes the next step. With nothing sounding, the next note may start in either. A latched
+  note or a drone counts as sounding.
+- **CHORD TYPE:** SCALE (the scale's triad), MIN, MAJ, SUS2, SUS4, FIFTH, MIN7, MAJ7, DIM, ADD9, CLUSTER, SCALE7 (the
+  scale's four notes, 1-3-5-7), QUART3 and QUART4 (stacked fourths), QUINT (stacked fifths), HARM (harmonics 4:5:6:7, at
+  each tuning's nearest steps).
 - **VOICING:** CLOSE, OPEN, SPREAD, +OCT, DROP. Big chords use more of the six voices.
 
 <img src="docs/manual/screens/arp.png" alt="ARP" width="300" align="right">

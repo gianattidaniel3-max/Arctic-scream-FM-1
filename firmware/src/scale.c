@@ -7,7 +7,8 @@
  *   chord_name:  "Cm7", "D#dim", a scale's odd triad by its notes ("C-F-A#")
  * The main loop and the audio ISR (note_on) both call these: no state of their own. */
 
-enum { CH_SCALE, CH_MIN, CH_MAJ, CH_SUS2, CH_SUS4, CH_FIFTH, CH_MIN7, CH_MAJ7, CH_DIM, CH_ADD9, CH_CLUSTER, NCHORD };
+enum { CH_SCALE, CH_MIN, CH_MAJ, CH_SUS2, CH_SUS4, CH_FIFTH, CH_MIN7, CH_MAJ7, CH_DIM, CH_ADD9, CH_CLUSTER, CH_SCALE7, CH_QUART3,
+       CH_QUART4, CH_QUINT, CH_HARM, NCHORD };   /* (16 at most: a chord step's byte has 4 bits for it) */
 enum { VC_CLOSE, VC_OPEN, VC_SPREAD, VC_OCT, VC_DROP, NVOICING };
 #define NSCALE 15
 #define CH_MAX 5u                               /* a chord's notes at most (4, and +OCT's) */
@@ -20,26 +21,69 @@ static const char *const SC_NAME[NSCALE] = {"CHROMATIC", "NATURAL MINOR", "MAJOR
 static const char *const SC_SHORT[NSCALE] = {"OFF", "MINOR", "MAJOR", "DORIAN", "PHRYG", "LYDIAN", "MIXO", "LOCRIA",
                                              "HARMIN", "PHRDOM", "HUNGMI", "DBLHAR", "MINPEN", "MAJPEN",
                                              "HORROR"};   /* (slabs) */
+/* a TUNING's own scales: bit i, i steps over ROOT. 19 EDO: the generated scales of that tuning (generator, notes:
+ * Kleismic 5 steps, 7; Negri 2, 9; Semaphore 4, 9; Magic 6, 7; Sensi 7, 8). 24 EDO: maqamat, and a normal
+ * scale with one or two whole tones filled with quarter tones: ZONE, mixolydian's 2-3 and 7-8; MAJZON, major's 2-3, 6-7 */
+#define NNATIVE 11
+static const struct { uint8_t edo; uint32_t mask; const char *name, *slab; } SC_NATIVE[NNATIVE] = {
+    {19, 0x8c63u, "KLEISMIC", "KLEISM"}, {19, 0x15555u, "NEGRI", "NEGRI"}, {19, 0x13333u, "SEMAPHORE", "SEMAPH"},
+    {19, 0x61861u, "MAGIC", "MAGIC"}, {19, 0x14a95u, "SENSI", "SENSI"},
+    {24, 0x244491u, "RAST", "RAST"}, {24, 0x114449u, "BAYATI", "BAYATI"}, {24, 0x111149u, "SABA", "SABA"},
+    {24, 0x224489u, "SIKAH", "SIKAH"}, {24, 0xf445f1u, "MIXO ZONES", "ZONE"}, {24, 0x7c45f1u, "MAJOR ZONES", "MAJZON"}};
+static uint32_t sc_native_n(void)               /* how many the TUNING has */
+{
+    uint32_t i, n = 0;
+    for (i = 0; i < NNATIVE; i++) n += SC_NATIVE[i].edo == (uint32_t)tn_edo();
+    return n;
+}
+static int32_t sc_native_at(int32_t k)          /* the TUNING's k-th: its row (-1: none) */
+{
+    int32_t i;
+    for (i = 0; i < NNATIVE; i++)
+        if (SC_NATIVE[i].edo == (uint32_t)tn_edo() && k-- == 0) return i;
+    return -1;
+}
+static inline int32_t sc_now(void)              /* SCALE as it counts: one the TUNING lacks: OFF */
+{
+    int32_t v = sc_scale;
+    return v < 0 || v >= NSCALE + (int32_t)sc_native_n() ? 0 : v;
+}
+static const char *sc_name(int32_t v) { return v < NSCALE ? SC_NAME[v < 0 ? 0 : v] : SC_NATIVE[sc_native_at(v - NSCALE)].name; }
+static const char *sc_slab(int32_t v) { return v < NSCALE ? SC_SHORT[v < 0 ? 0 : v] : SC_NATIVE[sc_native_at(v - NSCALE)].slab; }
 static const char *const SC_NOTE[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 static const char *const CH_SHORT[NCHORD] = {"SCALE", "MIN", "MAJ", "SUS2", "SUS4", "FIFTH", "MIN7", "MAJ7", "DIM",
-                                             "ADD9", "CLUSTR"};
-static const char *const CH_SUF[NCHORD] = {"m", "m", "", "sus2", "sus4", "5", "m7", "maj7", "dim", "add9", "clus"};
+                                             "ADD9", "CLUSTR", "SCALE7", "QUART3", "QUART4", "QUINT", "HARM"};
+static const char *const CH_SUF[NCHORD] = {"m", "m", "", "sus2", "sus4", "5", "m7", "maj7", "dim", "add9", "clus", "m7", "q3", "q4", "q5", "h"};
 static const uint8_t CH_IV[NCHORD][5] = {       /* its notes' count, then their semitones over the note */
     {3, 0, 3, 7}, {3, 0, 3, 7}, {3, 0, 4, 7}, {3, 0, 2, 7}, {3, 0, 5, 7}, {2, 0, 7}, {4, 0, 3, 7, 10}, {4, 0, 4, 7, 11},
-    {3, 0, 3, 6}, {4, 0, 4, 7, 14}, {3, 0, 2, 3}};
+    {3, 0, 3, 6}, {4, 0, 4, 7, 14}, {3, 0, 2, 3},
+    {4, 0, 3, 7, 10}, {3, 0, 5, 10}, {4, 0, 5, 10, 15}, {3, 0, 7, 14}, {4, 0, 4, 7, 10}};   /* (SCALE7 without a scale: MIN7;
+                                                 * HARM: harmonics 4:5:6:7, by CH_HARM_C at a TUNING) */
+static const int16_t CH_HARM_C[4] = {0, 386, 702, 969};   /* its cents */
 static const char *const VC_NAME[NVOICING] = {"CLOSE", "OPEN", "SPREAD", "+OCT", "DROP"};
 
 static int sc_in(int32_t n)                     /* note n (from 0) in the scale (a TUNING but 12 EDO: the scales are of
                                                  * twelve notes, every step is in) */
 {
-    if (tn_on()) return 1;
-    return SC_MASK[clamp(sc_scale, 0, NSCALE - 1)] >> ((uint32_t)(n + 132 - clamp(sc_root, 0, 11)) % 12u) & 1u;
+    int32_t edo = tn_edo(), v = sc_now();
+    if (edo != 12) {
+        int32_t d, i;
+        uint32_t mk;
+        if (!v) return 1;
+        d = (n - tn_anchor()) % edo;
+        if (d < 0) d += edo;
+        if (v >= NSCALE) return SC_NATIVE[sc_native_at(v - NSCALE)].mask >> d & 1u;
+        for (mk = SC_MASK[v], i = 0; i < 12; i++)   /* (the twelve-note scale: each note's nearest step) */
+            if ((mk >> i & 1u) && i * edo + 6 >= d * 12 && i * edo + 6 < (d + 1) * 12) return 1;
+        return 0;
+    }
+    return SC_MASK[v] >> ((uint32_t)(n + 132 - clamp(sc_root, 0, 11)) % 12u) & 1u;
 }
 static uint32_t sc_snap(uint32_t n)
 {
     int32_t d, m = (int32_t)n;
-    if (sc_scale <= 0 || tn_on()) return n;
-    for (d = 0; d < 12; d++) {
+    if (sc_now() <= 0) return n;
+    for (d = 0; d < tn_edo(); d++) {
         if (m - d >= 0 && sc_in(m - d)) return (uint32_t)(m - d);
         if (m + d <= 127 && sc_in(m + d)) return (uint32_t)(m + d);
     }
@@ -70,12 +114,14 @@ static uint32_t chord_notes_tv(int32_t ty, int32_t vo, uint32_t note, uint8_t *o
     int32_t n[CH_MAX], c, i, r = (int32_t)(note & 127u), oct = tn_edo();
     ty = clamp(ty, 0, NCHORD - 1);
     uint32_t k = 0;
-    if (ty == CH_SCALE && sc_scale > 0 && oct == 12) {   /* the scale's triad on it (a note off the scale: as its nearest's) */
+    if ((ty == CH_SCALE || ty == CH_SCALE7) && sc_now() > 0) {   /* the scale's triad on it, SCALE7 its seventh too (a note off
+                                                 * the scale: as its nearest's) */
         int32_t s = (int32_t)sc_snap(note);
         n[0] = r, n[1] = r + sc_up(s, 2) - s, n[2] = r + sc_up(s, 4) - s, c = 3;
+        if (ty == CH_SCALE7) n[3] = r + sc_up(s, 6) - s, c = 4;
     } else
         for (c = 0; c < CH_IV[ty][0]; c++)      /* (a TUNING: each interval's nearest step) */
-            n[c] = r + (CH_IV[ty][1 + c] * oct + 6) / 12;
+            n[c] = r + (ty == CH_HARM && oct != 12 ? (CH_HARM_C[c] * oct + 600) / 1200 : (CH_IV[ty][1 + c] * oct + 6) / 12);
     switch (clamp(vo, 0, NVOICING - 1)) {
     case VC_OPEN: if (c >= 3) n[1] += oct; break;   /* the middle note up an octave */
     case VC_SPREAD: n[0] -= oct; for (i = 1; i < c; i++) n[i] += oct; break;   /* the root down, the rest up */
@@ -115,12 +161,15 @@ static char *chord_name_tv(int32_t ty, uint32_t note, char *s)   /* CHORD TYPE t
     static const char *const TRI_SUF[6] = {"m", "", "dim", "aug", "sus2", "sus4"};
     int32_t i;
     ty = clamp(ty, 0, NCHORD - 1);
-    if (tn_on()) return put_s(tn_name(s, note), ty == CH_SCALE ? "m" : CH_SUF[ty]);
+    if (tn_on()) return put_s(tn_name(s, note), (ty == CH_SCALE || ty == CH_SCALE7) && sc_now() > 0 ? (ty == CH_SCALE ? "tri" : "7th") : CH_SUF[ty]);
     s = put_s(s, SC_NOTE[note % 12u]);
-    if (ty == CH_SCALE && sc_scale > 0) {
-        int32_t r = (int32_t)sc_snap(note), a = sc_up(r, 2) - r, b = sc_up(r, 4) - r;
+    if ((ty == CH_SCALE || ty == CH_SCALE7) && sc_now() > 0) {
+        int32_t r = (int32_t)sc_snap(note), a = sc_up(r, 2) - r, b = sc_up(r, 4) - r, g = sc_up(r, 6) - r;
         for (i = 0; i < 6; i++)
-            if (TRI[i][0] == a && TRI[i][1] == b) return put_s(s, TRI_SUF[i]);
+            if (TRI[i][0] == a && TRI[i][1] == b) {
+                s = put_s(s, ty == CH_SCALE7 && g == 11 && i == 1 ? "maj" : TRI_SUF[i]);
+                return ty == CH_SCALE7 ? put_s(s, "7") : s;
+            }
         s = put_s(put_s(s, "-"), SC_NOTE[(note + (uint32_t)a) % 12u]);   /* (a triad without a name: its notes) */
         return put_s(put_s(s, "-"), SC_NOTE[(note + (uint32_t)b) % 12u]);
     }

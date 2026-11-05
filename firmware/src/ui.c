@@ -374,7 +374,7 @@ static void ui_slab_make(uint32_t k, slab_t *S)
         if (k == 2u) { put_s(S->val, v ? ENGINES[clamp(v - 1, 0, NENG - 1)]->name : "ALL"); return; }
         put_s(S->val, SV_ACT[clamp(v, 0, 2)]);
         return;
-    case PG_SCALE: put_s(S->val, k == 2u ? TN_NAME[clamp(v, 0, NTUNING - 1)] : k ? (tn_on() ? "--" : SC_SHORT[clamp(v, 0, NSCALE - 1)]) : SC_NOTE[clamp(v, 0, 11)]); return;
+    case PG_SCALE: put_s(S->val, k == 3u ? (!tn_on() || (tn_edo() & 1) ? "--" : v ? "ON" : "OFF") : k == 2u ? TN_NAME[clamp(v, 0, NTUNING - 1)] : k ? sc_slab(sc_now()) : SC_NOTE[clamp(v, 0, 11)]); return;
     case PG_SONG:
         if (k == 0u || k == 2u) {               /* SECTION, REPEATS: "03" */
             v = clamp(v + (k ? 0 : 1), 1, 16);
@@ -1575,7 +1575,9 @@ static void pic_sel(void)                       /* Scale: where each key stands.
     for (i = 0; i < nlat; i++)
         if (lat_trk[i] == sel && lat_note[i] >= base && lat_note[i] < base + 27u) held |= 1u << (lat_note[i] - base);
     e = put_s(put_s(l, SC_NOTE[clamp(sc_root, 0, 11)]), " ");
-    put_s(e, edo != 12u ? TN_NAME[clamp(sc_tuning, 0, NTUNING - 1)] : SC_NAME[clamp(sc_scale, 0, NSCALE - 1)]);
+    if (edo == 12u) put_s(e, sc_name(sc_now()));
+    else if (sc_now() > 0) put_s(put_s(put_u(e, edo), " "), sc_slab(sc_now()));
+    else put_s(e, TN_NAME[clamp(sc_tuning, 0, NTUNING - 1)]);
     ui_note(put_s(ui_note(rg, base), "-"), base + 26u);   /* (the keys' range: "F2-G4") */
     ui_caption(l, rg);
     /* the keyboard: a semitone's cell is edo x 2 / 3 px wide, on its pitch */
@@ -1588,7 +1590,7 @@ static void pic_sel(void)                       /* Scale: where each key stands.
         if (BLK[pc] && x1 >= x0 && edo >= 10u) ui_rect(x0, 44, x1 - x0, 1, UI_M0);
     }
     for (k = 0; k < 27u; k++) {
-        int32_t rx = rx0 + (int32_t)k * 8, in = sc_in((int32_t)(base + k)), ch = (int32_t)(lit >> k & 1u), hd = (int32_t)(held >> k & 1u);
+        int32_t rx = rx0 + (int32_t)k * 8, in = sc_in((int32_t)(base + k)) && !(tn_field_on() && nlat && tn_field(base + k) != tn_field(lat_note[0])), ch = (int32_t)(lit >> k & 1u), hd = (int32_t)(held >> k & 1u);
         int32_t len = hd || ch ? 44 : in ? 34 : 10, y0 = hd ? 44 : 58;
         uint16_t c = UI_M0;
         if (edo != 12u) {
@@ -1616,7 +1618,7 @@ static void pic_sel(void)                       /* Scale: where each key stands.
         else if (!trk[sel].chord) put_s(l, "CHORD OFF");
         else {
             for (i = 0, k = 1; i < n; i++) k &= (uint32_t)sc_in(ns[i]);   /* (all of them in the scale: IN KEY) */
-            put_s(put_u(l, n), n == 1u ? " NOTE" : k && sc_scale > 0 ? " NOTES IN KEY" : " NOTES");
+            put_s(put_u(l, n), n == 1u ? " NOTE" : k && sc_now() > 0 ? " NOTES IN KEY" : " NOTES");
         }
         if (x + 8 * ui_len(l) <= 228) ui_text(x, 128, l, 1, UI_M);
     }
@@ -2027,7 +2029,7 @@ static uint32_t ui_pic_key(void)
         UI_H(trk[t].level), UI_H(trk[t].dly), UI_H(trk[t].rev), UI_H(trk[t].grn), UI_H(trk[t].pan), UI_H(trk[t].eng),
             UI_H(trk[t].ftype), UI_H(trk[t].fpos);
     UI_H(trk[sel].fm_alg), UI_H(trk[sel].fm_fb), UI_H(fm_op), UI_H(trk[sel].p[ENG_FM][0]);
-    UI_H(trk[sel].latch), UI_H(trk[sel].chord), UI_H(trk[sel].ch_type), UI_H(trk[sel].ch_voice), UI_H(sc_root), UI_H(sc_scale), UI_H(sc_tuning);
+    UI_H(trk[sel].latch), UI_H(trk[sel].chord), UI_H(trk[sel].ch_type), UI_H(trk[sel].ch_voice), UI_H(sc_root), UI_H(sc_scale), UI_H(sc_tuning), UI_H(sc_field);
     if (PAGES[page].btn == BTN_SEL) {
         UI_H(ch_last), UI_H(ui_oct), UI_H(nlat);
         for (uint32_t ih = 0; ih < nlat; ih++) UI_H(lat_note[ih]);

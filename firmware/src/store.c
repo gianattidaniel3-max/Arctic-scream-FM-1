@@ -46,7 +46,7 @@
 #define SEQ_PK5 196u                            /* (version 5 and before: 3 B a step) */
 #define LOCK_PK 288u                            /* a track's step locks: 64 x the four values, 64 x 4 bits which */
 #define SLOT_LEN(tn, sq, lk) (4u + NT * ((tn) + (sq) + (lk)))   /* a slot: [0] used, its tracks, sequences, locks */
-#define SONG_PK 20u                             /* the song: its chain (16), MODE, the mutes and solos, TUNING (its steps; 0: 12), 1 spare */
+#define SONG_PK 20u                             /* the song: its chain (16), MODE, the mutes and solos, TUNING (its steps; 0: 12), a TUNING's own scale + 1 | FIELD << 7 */
 #define FX2_PK 8u                               /* (V2, version 8) MASTER's four, DRIVE's four */
 #define WORK_LEN(tn, sg, sq, lk, fm, fx) (NT * ((tn) + (sq) + (lk)) + 16u + 4u + (sg) + (fm) + (fx))   /* the working
                                                  * project: tracks, effects, tempo, slot, .., sequences, locks, the
@@ -552,7 +552,7 @@ static void pk_work(uint8_t *q)
     for (k = 0; k < 16u; k++) *q++ = (uint8_t)clamp(*PK_FX[k], 0, 127);
     q[0] = (uint8_t)clamp(seq_bpm, 20, 300), q[1] = (uint8_t)(clamp(seq_bpm, 20, 300) >> 8);
     q[2] = (uint8_t)(clamp(slot_cur, 0, 3) | clamp(sc_root, 0, 11) << 4);   /* (and SCALE's ROOT, */
-    q[3] = (uint8_t)((sel & 3u) | (uint32_t)clamp(sc_scale, 0, NSCALE - 1) << 4);   /* the track selected, SCALE) */
+    q[3] = (uint8_t)((sel & 3u) | (uint32_t)(sc_now() < NSCALE ? sc_now() : 0) << 4);   /* the track selected, SCALE) */
     q += 4;
     for (t = 0; t < NT; t++) q = pk_seq(q, t);
     for (t = 0; t < NT; t++) q = pk_lock(q, t);
@@ -560,7 +560,8 @@ static void pk_work(uint8_t *q)
         q[k] = (uint8_t)(clamp(song_pat[k], 0, SONG_END) | (clamp(song_rep[k], 1, 16) - 1) << 3);
     q[16] = (uint8_t)clamp(song_mode, 0, NSONGMODE - 1);   /* MODE, */
     q[17] = (uint8_t)((trk_mute & 15u) | (trk_solo & 15u) << 4);   /* the mutes and solos, */
-    q[18] = tn_on() ? (uint8_t)tn_edo() : 0, q[19] = 0;   /* TUNING (12: 0, the bytes as before it) */
+    q[18] = tn_on() ? (uint8_t)tn_edo() : 0, q[19] = (uint8_t)((sc_now() >= NSCALE ? sc_now() - NSCALE + 1 : 0) | (sc_field ? 0x80 : 0));   /* TUNING (12: 0, the
+                                                 * bytes as before it); its own scales, FIELD */
     for (t = 0; t < NT; t++) pk_fm(q + SONG_PK + t * FM_PK, t);   /* the FM patches */
     q += SONG_PK + FM_ALL;                      /* (V2) MASTER, DRIVE */
     q[0] = (uint8_t)clamp(mf_cut, 0, 127), q[1] = (uint8_t)clamp(mf_res, 0, 127);
@@ -594,14 +595,15 @@ static void uk_work(const uint8_t *q, uint32_t f, const uint16_t *vs)   /* (f: U
         dr_amt = fx ? clamp(x[4], 0, 127) : 0, dr_type = fx ? clamp(x[5], 0, NDTYPE - 1) : DT_SOFT;
         dr_tone = fx ? clamp(x[6], 0, 127) : 127, dr_mix = fx ? clamp(x[7], 0, 127) : 127;
     }
-    if (globals && !sg) sc_tuning = TN_12;
+    if (globals && !sg) sc_tuning = TN_12, sc_field = 0;
     if (!sg) return;                            /* (saved before the song: as it is) */
     if (f & UW_CHAIN)
         for (k = 0; k < SONG_N; k++) song_pat[k] = clamp(q[k] & 7u, 0, SONG_END), song_rep[k] = (q[k] >> 3 & 15u) + 1u;
     if (globals) {
         song_mode = clamp(q[16], 0, NSONGMODE - 1);
         trk_mute = q[17] & 15u, trk_solo = q[17] >> 4 & 15u;
-        sc_tuning = tn_index(q[18]);
+        sc_tuning = tn_index(q[18]), sc_field = q[19] >> 7;
+        if (q[19] & 63u) sc_scale = NSCALE + (q[19] & 63) - 1;
     }
 }
 static void pk_slot(uint8_t *q)                 /* the four tracks, their sequences and locks into a slot (used) */

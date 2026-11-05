@@ -107,19 +107,70 @@ check(notes(p) == [60, 65, 71], f"19 EDO chord: {notes(p)}")
 p = run("ch12", setup(0, 12) + chord, 1800)
 check(notes(p) == [60, 63, 67], f"12 EDO chord: {notes(p)}")
 
-# a scale set: ignored while TUNING is on (no note snapped), back on at 12
-p = run("sc", setup(0, 19) + [(480, "enc 3 2"), (600, "midi 0x90 61 100"), (900, "probe"), (950, "midi 0x80 61 0")], 1000)
-check(notes(p) == [61], f"19 EDO with MAJOR set: note 61 is not snapped: {notes(p)}")
-p = run("sc12", setup(0, 12) + [(480, "enc 3 2"), (600, "midi 0x90 61 100"), (900, "probe"), (950, "midi 0x80 61 0")], 1000)
-check(notes(p) == [60], f"12 EDO with MAJOR set: note 61 snaps to 60: {notes(p)}")
+# a scale at a TUNING
+def scale(edo, k, n):
+    return notes(run(f"sc{edo}{k}{n}", setup(0, edo) + [(480, f"enc 3 {k}"), (600, f"midi 0x90 {n} 100"), (900, "probe"), (950, f"midi 0x80 {n} 0")], 1000))
+check(scale(12, 2, 61) == [60], "12 EDO MAJOR: note 61 snaps to 60")
+check(scale(19, 2, 61) == [62], "19 EDO MAJOR, converted: step 13 snaps to 14 (a major sixth)")
+check(scale(19, 15, 50) == [49], "19 EDO KLEISMIC: step 2 snaps to 1")
+check(scale(24, 15, 49) == [48], "24 EDO RAST: step 1 snaps to 0")
+check(scale(24, 15, 55) == [55], "24 EDO RAST: step 7, the half-flat third, stays")
+check(scale(24, 19, 54) == [54], "24 EDO MIXO ZONES: step 6, a quarter tone in the zone, stays")
+check(scale(24, 19, 57) == [56], "24 EDO MIXO ZONES: step 9, outside the zones, snaps to 8")
+
+
+# chord types: hold SEL for chord mode, then SEL again to CHORD (KNOB 1: its type)
+def chord_of(edo, ty, sc=0, field=0, n=60):
+    ev = setup(0, edo)
+    if sc: ev.append((480, f"enc 3 {sc}"))
+    if field: ev.append((490, "enc 5 1"))
+    ev += [(500, f"down {SEL}"), (1200, f"up {SEL}"), (1300, f"btn {SEL}"), (1400, f"enc {K1} {ty}"),
+           (1500, f"midi 0x90 {n} 100"), (1800, "probe"), (1900, f"midi 0x80 {n} 0")]
+    return notes(run(f"cht{edo}{ty}{sc}{field}", ev, 2000))
+for what, got, want in (
+    ("12 EDO MAJOR, SCALE7", chord_of(12, 11, 2), [60, 64, 67, 71]),
+    ("12 EDO, no scale, SCALE7", chord_of(12, 11), [60, 63, 67, 70]),
+    ("12 EDO QUART3", chord_of(12, 12), [60, 65, 70]),
+    ("12 EDO QUART4", chord_of(12, 13), [60, 65, 70, 75]),
+    ("12 EDO QUINT", chord_of(12, 14), [60, 67, 74]),
+    ("12 EDO HARM", chord_of(12, 15), [60, 64, 67, 70]),
+    ("24 EDO HARM", chord_of(24, 15), [60, 68, 74, 79]),
+    ("19 EDO HARM", chord_of(19, 15), [60, 66, 71, 75]),
+    ("24 EDO QUART4", chord_of(24, 13), [60, 70, 80, 90]),
+    ("24 EDO FIELD: HARM's odd step moves in", chord_of(24, 15, 0, 1), [60, 68, 74, 78]),
+):
+    check(got == want, f"{what}: {got}")
+
+
+# FIELD
+def field(edo, on, ns):
+    ev, t = setup(0, edo), 600
+    if on: ev.append((500, "enc 5 1"))
+    for n in ns:
+        ev.append((t, f"midi 0x90 {n} 100")); t += 100
+    ev += [(t + 200, "probe")]
+    return notes(run(f"f{edo}{on}" + "_".join(map(str, ns)), ev, t + 300))
+check(field(24, 0, [60, 61]) == [60, 61], "24 EDO FIELD off: 60 and 61 sound together")
+check(field(24, 1, [60, 61]) == [60, 60], "24 EDO FIELD on: 61 over 60 takes a step of 60's field")
+check(field(24, 1, [60, 62]) == [60, 62], "24 EDO FIELD on: 62 over 60 is in its field")
+check(field(24, 1, [61, 62]) == [61, 61], "24 EDO FIELD on: a quarter tone first sets the other field")
+check(field(19, 1, [60, 61]) == [60, 61], "19 EDO: no fields, FIELD does nothing")
+check(field(12, 1, [60, 61]) == [60, 61], "12 EDO: FIELD does nothing")
+ev = setup(0, 24) + [(500, "enc 5 1"), (520, f"down {SEL}"), (560, "btn 1"), (600, f"up {SEL}"),   # (LATCH off: SEL + OCT+)
+                     (700, "midi 0x90 60 100"), (900, "midi 0x80 60 0"), (1100, "midi 0x90 61 100"), (1300, "probe")]
+p = run("fm", ev, 1400)
+check(notes(p) == [61], f"24 EDO FIELD: nothing sounding, the next note may change field: {notes(p)}")
+ev = setup(0, 24) + [(500, "enc 5 1"), (700, "midi 0x90 60 100"), (900, "midi 0x80 60 0"), (1100, "midi 0x90 61 100"), (1300, "probe")]
+p = run("fl", ev, 1400)
+check(60 in notes(p) and 61 not in notes(p), f"24 EDO FIELD, LATCH on: a latched note still holds the field: {notes(p)}")
 
 # saved and loaded
 import os
 sv = OUT / "save.bin"
-run("save", setup(0, 19), 5000, {**os.environ, "GRIMM_SAVE_OUT": str(sv)})
+run("save", setup(0, 24) + [(480, "enc 3 15"), (490, "enc 5 1")], 5000, {**os.environ, "GRIMM_SAVE_OUT": str(sv)})
 p = run("load", [(300, f"btn {SEL}"), (400, "probe")], 500, {**os.environ, "GRIMM_SAVE_IN": str(sv)})
-m = re.search(r" tuning (\d+)", p)
-check(m and m.group(1) == "19", f"19 EDO saved, power on: TUNING {m and m.group(1)}")
+m = re.search(r" tuning (\d+) scale (\d+) field (\d+)", p)
+check(m and m.groups() == ("24", "15", "1"), f"24 EDO, RAST, FIELD saved, power on: {m and m.groups()}")
 p = run("old", [(400, "probe")], 500, {**os.environ, "GRIMM_SAVE_IN": "tests/data/a1.2-saves.bin"})
 m = re.search(r" tuning (\d+)", p)
 check(m and m.group(1) == "12", f"a project from before TUNING loads at {m and m.group(1)}")
