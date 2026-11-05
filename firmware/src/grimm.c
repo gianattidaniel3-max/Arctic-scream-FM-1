@@ -941,7 +941,7 @@ static struct {
 } set;
 #define SET_VER 3u
 static uint32_t set_dirty, set_t;               /* the settings changed, when */
-static volatile int32_t sy_col, sy_mch, sy_tune, sy_scr, sy_learn, sy_out, sy_fac, sy_clk, sy_latch;   /* SYSTEM's,
+static volatile int32_t sy_col, sy_mch, sy_tune, sy_scr, sy_learn, sy_out, sy_fac, sy_clk, sy_latch, sy_ccmap;   /* SYSTEM's,
                                                  * SYSTEM 2's, SYSTEM 3's knobs (sy_fac: SAMPLES, 1 RESTORE: OCT+
                                                  * writes the factory ones) */
 static uint32_t fac_at;                         /* RESTORE confirmed: when it writes (the header said first), 0 none */
@@ -1050,7 +1050,7 @@ static const page_t PAGES[NPAGE] = {
                                                  * SOURCE's) */
     {"MASTER", BTN_FX, 1, 0, 1, {"CUTOFF", "RESONANCE", "TYPE", "POSITION"}},   /* (GR!MM V2: FX's 5th and 6th, master.c) */
     {"DRIVE", BTN_FX, 1, 0, 1, {"AMOUNT", "TYPE", "TONE", "MIX"}},
-    {"SYSTEM 3", BTN_HOME, 1, 0, 0, {"LATCH", "", "", ""}},   /* (V2: a NEW project's tracks' LATCH) */
+    {"SYSTEM 3", BTN_HOME, 1, 0, 0, {"LATCH", "CC MAP", "", ""}},   /* (V2: a NEW project's tracks' LATCH) */
     {"BANK", BTN_LFO, 1, 1, 1, {"MODE", "RING", "MIX", "WIND"}},   /* (LFO's third and fourth: bank.c) */
     {"BANK 2", BTN_LFO, 1, 1, 1, {"GLACIER", "", "", ""}},
 };
@@ -1140,7 +1140,7 @@ static volatile int32_t *knob_param(uint32_t pg, uint32_t k)   /* what KNOB k + 
     case PG_PROJECTS: return k == 0u ? &pj_slot : k == 3u ? &pj_act : 0;   /* (CATEGORY, TYPE: "-") */
     case PG_SYSTEM: return k == 0u ? &sy_col : k == 1u ? &sy_mch : k == 2u ? &sy_tune : &sy_scr;
     case PG_SYS2: return k == 0u ? &sy_learn : k == 1u ? &sy_out : k == 2u ? &sy_fac : &sy_clk;
-    case PG_SYS3: return k == 0u ? &sy_latch : 0;
+    case PG_SYS3: return k == 0u ? &sy_latch : k == 1u ? &sy_ccmap : 0;
     default: return 0;                          /* (not built yet: the knobs do nothing) */
     }
 }
@@ -1652,12 +1652,14 @@ static void cc_apply(const uint8_t *L, uint32_t val)   /* a linked CC: its param
     seq[sel].cursor = cu, sel = s, fm_op = op;
     if (pg == PG_SONG && (k == 1u || k == 2u)) song_sect = ss;
 }
-static void midi_cc(uint32_t cc, uint32_t val)  /* a CC in (any channel) */
+#include "ccmap.c"                              /* SYSTEM 3's CC MAP */
+static void midi_cc(uint32_t cc, uint32_t val, uint32_t ch)   /* a CC in: a link (any channel), else the CC MAP */
 {
     uint32_t i;
     if (learn_st == 2u) { learn_cc(cc); return; }
     for (i = 0; i < set.nlk && i < NLINK; i++)
         if (set.lk[i][0] == cc) { cc_apply(set.lk[i], val); return; }
+    if (set.latch >> 1 & 1u) cc_map(cc, val, ch);
 }
 
 /* ---- USB-MIDI out: the keys' notes (the selected track's), and with SEQ MIDI OUT the steps' and the arps', each on its
@@ -1703,7 +1705,7 @@ static void sys_sync(void)
 {
     int8_t tn = (int8_t)clamp(sy_tune, -50, 50);
     uint8_t col = (uint8_t)clamp(sy_col, 0, 3), mch = (uint8_t)clamp(sy_mch, 0, MCH_MAX), scr = (uint8_t)clamp(sy_scr, 0, 4);
-    uint8_t out = (uint8_t)clamp(sy_out, 0, 1), clk = (uint8_t)clamp(sy_clk, 0, CK_N - 1), la = (uint8_t)clamp(sy_latch, 0, 1);
+    uint8_t out = (uint8_t)clamp(sy_out, 0, 1), clk = (uint8_t)clamp(sy_clk, 0, CK_N - 1), la = (uint8_t)(clamp(sy_latch, 0, 1) | clamp(sy_ccmap, 0, 1) << 1);   /* (LATCH, and CC MAP in bit 1) */
     uint32_t n, t;
     if (mch != set.mch || (set.out && !out)) mo_flush = 1;
     if (mch != set.mch)
@@ -1721,7 +1723,7 @@ static void sys_sync(void)
     ck_mode = set.clk, rt_usb_fast = set.clk == CK_USB;   /* (CLOCK: the audio ISR's, platform.c's) */
     ui_acc_user = UI_ACCENTS[set.col & 3u];
     tune_f = (set.tune * 23666 + set.tune * set.tune * 7) / 10000;   /* (2^(c / 1200) - 1, x 4096) */
-    mo_seq = set.out, snd_latch_off = set.latch;
+    mo_seq = set.out, snd_latch_off = set.latch & 1u;
 }
 static void sys_load(void)                      /* the settings at power-on into SYSTEM's knobs (version 19's: the
                                                  * octave alone; steps 20..24's: no ver, their links to HOME's T1..T4
@@ -1743,11 +1745,11 @@ static void sys_load(void)                      /* the settings at power-on into
     }
     if (set.mch > MCH_MAX) set.mch = 0;
     if (set.clk >= CK_N) set.clk = CK_INT;
-    if (set.latch > 1u) set.latch = 0;
+    if (set.latch > 3u) set.latch = 0;
     if (set.oct < -2 || set.oct > 2) set.oct = 0;
     if (set.nlk > NLINK) set.nlk = 0;
     sy_col = set.col, sy_mch = set.mch, sy_tune = set.tune, sy_scr = set.scr, sy_out = set.out, sy_clk = set.clk;
-    sy_latch = set.latch;
+    sy_latch = set.latch & 1u, sy_ccmap = set.latch >> 1 & 1u;
     sys_sync();
     set_dirty = 0;
     if (!set.ver)                               /* (steps 20..24's; V1.0's are version 1: as they are) */
@@ -2282,7 +2284,7 @@ static void app_main(void)
                                 nq_note(NQ_OFF, m, 0, MIDI_ID(n));
                                 midi_held[n] &= (uint8_t)~(0x11u << m);
                             }
-                midi_cc(d1, d2 & 0x7Fu);
+                midi_cc(d1, d2 & 0x7Fu, c);
                 continue;
             }
             if (ty == 0xD0u || ty == 0xA0u) {   /* pressure (channel, poly: the last key's): the track's Holvut */

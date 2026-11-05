@@ -367,7 +367,7 @@ static void ui_slab_make(uint32_t k, slab_t *S)
         put_s(S->val, k == 2u ? (v ? SMP_FACT_N ? "RESTORE" : "CLEAR" : "KEEP") : k ? (v ? "ON" : "OFF") :
               v == LEARN_CLEAR ? "CLEAR" : LEARN_NAME[clamp(v, 0, 2)]);
         return;
-    case PG_SYS3: put_s(S->val, v ? "OFF" : "SOUND"); return;   /* (V2) LATCH: FROM SOUND, ALWAYS OFF */
+    case PG_SYS3: put_s(S->val, k ? (v ? "ON" : "OFF") : v ? "OFF" : "SOUND"); return;   /* (V2) LATCH: FROM SOUND, ALWAYS OFF */
     case PG_SOUNDS:
         if (k == 0u) { ui_3(S->val, (uint32_t)v + 1u); return; }
         if (k == 1u) { ui_squeeze(S->val, CAT_NAME[clamp(v, 0, NCAT - 1)]); return; }
@@ -2006,9 +2006,10 @@ static void pic_sys2(void)
 static void pic_sys3(void)                      /* (V2) SYSTEM 3: LATCH, what it does; the combo for the track's */
 {
     ui_caption("LOADING A SOUND", 0);
-    sys_row(0, "LATCH", set.latch ? "ALWAYS OFF" : "FROM SOUND");
-    ui_text(PX0 + 6, 98, set.latch ? "A SOUND LOADED: THE" : "A SOUND BRINGS ITS OWN", 1, UI_M);
-    ui_text(PX0 + 6, 110, set.latch ? "TRACK'S LATCH OFF" : "LATCH WITH IT", 1, UI_M);
+    sys_row(0, "LATCH", set.latch & 1u ? "ALWAYS OFF" : "FROM SOUND");
+    sys_row(1, "CC MAP", set.latch & 2u ? "ON" : "OFF");
+    ui_text(PX0 + 6, 112, set.latch & 1u ? "A SOUND LOADED: THE" : "A SOUND BRINGS ITS OWN", 1, UI_M);
+    ui_text(PX0 + 6, 124, set.latch & 1u ? "TRACK'S LATCH OFF" : "LATCH WITH IT", 1, UI_M);
     ui_text(PX0 + 6, 140, "SEL + OCT+: THE TRACK'S", 1, UI_M);
     ui_text(PX0 + 6, 152, "LATCH ON, OFF", 1, UI_M);
 }
