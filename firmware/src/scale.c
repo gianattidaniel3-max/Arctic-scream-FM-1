@@ -25,11 +25,12 @@ static const char *const SC_SHORT[NSCALE] = {"OFF", "MINOR", "MAJOR", "DORIAN", 
  * Kleismic 5 steps, 7; Negri 2, 9; Semaphore 4, 9; Magic 6, 7; Sensi 7, 8). 24 EDO: maqamat, and a normal
  * scale with one or two whole tones filled with quarter tones: ZONE, mixolydian's 2-3 and 7-8; MAJZON, major's 2-3, 6-7 */
 #define NNATIVE 11
-static const struct { uint8_t edo; uint32_t mask; const char *name, *slab; } SC_NATIVE[NNATIVE] = {
-    {19, 0x8c63u, "KLEISMIC", "KLEISM"}, {19, 0x15555u, "NEGRI", "NEGRI"}, {19, 0x13333u, "SEMAPHORE", "SEMAPH"},
-    {19, 0x61861u, "MAGIC", "MAGIC"}, {19, 0x14a95u, "SENSI", "SENSI"},
-    {24, 0x244491u, "RAST", "RAST"}, {24, 0x114449u, "BAYATI", "BAYATI"}, {24, 0x111149u, "SABA", "SABA"},
-    {24, 0x224489u, "SIKAH", "SIKAH"}, {24, 0xf445f1u, "MIXO ZONES", "ZONE"}, {24, 0x7c45f1u, "MAJOR ZONES", "MAJZON"}};
+static const struct { uint8_t edo; uint32_t mask;   /* (in decimal: tools/build.py takes long hex for a register) */
+    const char *name, *slab; } SC_NATIVE[NNATIVE] = {
+    {19, 35939u, "KLEISMIC", "KLEISM"}, {19, 87381u, "NEGRI", "NEGRI"}, {19, 78643u, "SEMAPHORE", "SEMAPH"},
+    {19, 399457u, "MAGIC", "MAGIC"}, {19, 84629u, "SENSI", "SENSI"},
+    {24, 2376849u, "RAST", "RAST"}, {24, 1131593u, "BAYATI", "BAYATI"}, {24, 1118537u, "SABA", "SABA"},
+    {24, 2245769u, "SIKAH", "SIKAH"}, {24, 16008689u, "MIXO ZONES", "ZONE"}, {24, 8144369u, "MAJOR ZONES", "MAJZON"}};
 static uint32_t sc_native_n(void)               /* how many the TUNING has */
 {
     uint32_t i, n = 0;
