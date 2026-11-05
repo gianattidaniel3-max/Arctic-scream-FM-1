@@ -205,13 +205,18 @@ North Sami names.
 
 **SEL** opens **SCALE → CHORD**. **Hold SEL** (and let go) for chord mode on or off: one key, a whole chord.
 
-| Page | KNOB 1 | KNOB 2 |
-|---|---|---|
-| SCALE | ROOT (C–B) | SCALE |
-| CHORD | CHORD TYPE | VOICING |
+| Page | KNOB 1 | KNOB 2 | KNOB 3 |
+|---|---|---|---|
+| SCALE | ROOT (C–B) | SCALE | TUNING |
+| CHORD | CHORD TYPE | VOICING | |
 
 - **SCALE**, shared by all tracks: OFF and fourteen scales, the last of them **HORROR**: close semitones, every note
   wrong in the right way. With a scale set, keys, MIDI and recordings snap to it.
+- **TUNING**, shared by all tracks and saved with the project: 12 EDO (normal), or the octave in 5, 7, 10, 14, 15, 16, 17,
+  19, 22, 24 or 31 equal steps. Each key is then **one step**, so an octave takes as many keys as the tuning has steps;
+  **OCT** still moves a real octave. **ROOT** in the third octave keeps its normal pitch. SCALE works at 12 EDO only.
+  Notes show as octave.step from ROOT: **3.7** is seven steps over ROOT in octave 3. Chords use each interval's nearest
+  step. Notes sent out over MIDI stay plain note numbers.
 - **CHORD TYPE:** SCALE (the scale's own chord), MIN, MAJ, SUS2, SUS4, FIFTH, MIN7, MAJ7, DIM, ADD9, CLUSTER.
 - **VOICING:** CLOSE, OPEN, SPREAD, +OCT, DROP. Big chords use more of the six voices.
 

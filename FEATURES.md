@@ -106,6 +106,7 @@ New in 1.1. The idea follows Jangada's DRONE page; it is written from scratch. T
 
 ## Scales, chords and the arpeggiator
 
+- **SEL → SCALE → TUNING**: 12 EDO, or 5, 7, 10, 14, 15, 16, 17, 19, 22, 24 or 31 equal steps, a key a step, every source.
 - **SEL → SCALE**: ROOT and SCALE, shared by all tracks. Keys, MIDI in and recordings snap to it. OFF and fourteen
   scales, the last of them **HORROR**: close semitones, every note wrong in the right way.
 - **SEL → CHORD**: CHORD TYPE (SCALE, MIN, MAJ, SUS2, SUS4, FIFTH, MIN7, MAJ7, DIM, ADD9, CLUSTER) and VOICING (CLOSE,

@@ -31,6 +31,19 @@ and release it. For building from scratch see [docs/BUILDING.md](docs/BUILDING.m
 
 ## What changed, by area
 
+### TUNING (EDO)
+
+- `firmware/src/tuning.c`: `VP16` (every source's pitch) asks `tn_p16` for a note's pitch; `tn_fine` adds what the 1/16
+  semitone rounding left, through `vc_fine` (`vc_tn` for SAMPLE and VA's second oscillator). 12 EDO runs none of it.
+- Note numbers stay 0..127, a number a step, so sequences, MIDI and saves are unchanged. The saved byte is the song
+  block's first spare one (`store.c`, 0 = 12 EDO, so saves at 12 are the same bytes as before).
+- `tests/tuning_test.py` measures the pitches in the audio.
+
+### Flash chips
+
+`fl_known` (`fm1_flash.h`) accepts the first units' 0x856014 and the newer units' UC25HQ80, 0xB36014, in the app, the
+rescue and the update loader.
+
 ### Identity
 
 | | Arctic Scream | GR!MM |

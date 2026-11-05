@@ -28,16 +28,17 @@ static const uint8_t CH_IV[NCHORD][5] = {       /* its notes' count, then their 
     {3, 0, 3, 7}, {3, 0, 3, 7}, {3, 0, 4, 7}, {3, 0, 2, 7}, {3, 0, 5, 7}, {2, 0, 7}, {4, 0, 3, 7, 10}, {4, 0, 4, 7, 11},
     {3, 0, 3, 6}, {4, 0, 4, 7, 14}, {3, 0, 2, 3}};
 static const char *const VC_NAME[NVOICING] = {"CLOSE", "OPEN", "SPREAD", "+OCT", "DROP"};
-static volatile int32_t sc_root, sc_scale;      /* SCALE: ROOT (C .. B), SCALE (0: OFF) */
 
-static int sc_in(int32_t n)                     /* note n (from 0) in the scale */
+static int sc_in(int32_t n)                     /* note n (from 0) in the scale (a TUNING but 12 EDO: the scales are of
+                                                 * twelve notes, every step is in) */
 {
+    if (tn_on()) return 1;
     return SC_MASK[clamp(sc_scale, 0, NSCALE - 1)] >> ((uint32_t)(n + 132 - clamp(sc_root, 0, 11)) % 12u) & 1u;
 }
 static uint32_t sc_snap(uint32_t n)
 {
     int32_t d, m = (int32_t)n;
-    if (sc_scale <= 0) return n;
+    if (sc_scale <= 0 || tn_on()) return n;
     for (d = 0; d < 12; d++) {
         if (m - d >= 0 && sc_in(m - d)) return (uint32_t)(m - d);
         if (m + d <= 127 && sc_in(m + d)) return (uint32_t)(m + d);
@@ -66,25 +67,29 @@ static int32_t sc_walk(int32_t n, int32_t d)    /* GRID's NOTE d notes of the sc
 static uint32_t chord_notes_tv(int32_t ty, int32_t vo, uint32_t note, uint8_t *out)   /* CHORD TYPE ty, VOICING vo on
                                                  * note: its notes (0..127, at most CH_MAX) */
 {
-    int32_t n[CH_MAX], c, i, r = (int32_t)(note & 127u);
+    int32_t n[CH_MAX], c, i, r = (int32_t)(note & 127u), oct = tn_edo();
     ty = clamp(ty, 0, NCHORD - 1);
     uint32_t k = 0;
-    if (ty == CH_SCALE && sc_scale > 0) {       /* the scale's triad on it (a note off the scale: as its nearest's) */
+    if (ty == CH_SCALE && sc_scale > 0 && oct == 12) {   /* the scale's triad on it (a note off the scale: as its nearest's) */
         int32_t s = (int32_t)sc_snap(note);
         n[0] = r, n[1] = r + sc_up(s, 2) - s, n[2] = r + sc_up(s, 4) - s, c = 3;
     } else
-        for (c = 0; c < CH_IV[ty][0]; c++) n[c] = r + CH_IV[ty][1 + c];
+        for (c = 0; c < CH_IV[ty][0]; c++)      /* (a TUNING: each interval's nearest step) */
+            n[c] = r + (CH_IV[ty][1 + c] * oct + 6) / 12;
     switch (clamp(vo, 0, NVOICING - 1)) {
-    case VC_OPEN: if (c >= 3) n[1] += 12; break;   /* the middle note up an octave */
-    case VC_SPREAD: n[0] -= 12; for (i = 1; i < c; i++) n[i] += 12; break;   /* the root down, the rest up */
-    case VC_OCT: n[c++] = r + 12; break;        /* close, and the root an octave up */
-    case VC_DROP: n[0] -= 12; break;            /* the root down an octave */
+    case VC_OPEN: if (c >= 3) n[1] += oct; break;   /* the middle note up an octave */
+    case VC_SPREAD: n[0] -= oct; for (i = 1; i < c; i++) n[i] += oct; break;   /* the root down, the rest up */
+    case VC_OCT: n[c++] = r + oct; break;        /* close, and the root an octave up */
+    case VC_DROP: n[0] -= oct; break;            /* the root down an octave */
     default: break;
     }
     for (i = 0; i < c; i++) {                   /* out of 0..127 (DROP, SPREAD at the ends): octaves in */
-        while (n[i] < 0) n[i] += 12;
-        while (n[i] > 127) n[i] -= 12;
-        out[k++] = (uint8_t)n[i];
+        uint32_t j;
+        while (n[i] < 0) n[i] += oct;
+        while (n[i] > 127) n[i] -= oct;
+        for (j = 0; j < k && out[j] != (uint8_t)n[i]; j++)   /* (few steps: two intervals may meet on one) */
+            ;
+        if (oct == 12 || j == k) out[k++] = (uint8_t)n[i];
     }
     return k;
 }
@@ -96,12 +101,21 @@ static uint32_t chord_step(uint32_t t)          /* a chord step's byte: track t'
 {
     return 0x80u | (uint32_t)clamp(trk[t].ch_voice, 0, NVOICING - 1) << 4 | (uint32_t)clamp(trk[t].ch_type, 0, NCHORD - 1);
 }
+static char *tn_name(char *s, uint32_t n)       /* a TUNING's note: its octave (the anchor's is 3), a dot, its step from
+                                                 * ROOT: "3.7" */
+{
+    int32_t edo = tn_edo(), d = (int32_t)n - tn_anchor(), o = d >= 0 ? d / edo : -((edo - 1 - d) / edo);
+    d -= o * edo, o += 3;
+    if (o < 0) *s++ = '-', o = -o;
+    return put_u(put_s(put_u(s, (uint32_t)o), "."), (uint32_t)d);
+}
 static char *chord_name_tv(int32_t ty, uint32_t note, char *s)   /* CHORD TYPE ty's name on note: "Cm7" */
 {
     static const uint8_t TRI[6][2] = {{3, 7}, {4, 7}, {3, 6}, {4, 8}, {2, 7}, {5, 7}};
     static const char *const TRI_SUF[6] = {"m", "", "dim", "aug", "sus2", "sus4"};
     int32_t i;
     ty = clamp(ty, 0, NCHORD - 1);
+    if (tn_on()) return put_s(tn_name(s, note), ty == CH_SCALE ? "m" : CH_SUF[ty]);
     s = put_s(s, SC_NOTE[note % 12u]);
     if (ty == CH_SCALE && sc_scale > 0) {
         int32_t r = (int32_t)sc_snap(note), a = sc_up(r, 2) - r, b = sc_up(r, 4) - r;

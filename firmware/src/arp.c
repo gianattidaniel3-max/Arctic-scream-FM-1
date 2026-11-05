@@ -56,7 +56,7 @@ static uint32_t arp_pattern(uint32_t t, uint8_t *p, uint32_t oct)
     if (mode == ARP_CHORD) oct = 1;
     for (o = 0; o < oct; o++)
         for (i = 0; i < n; i++)
-            if (b[i] + 12u * o <= 127u) p[k++] = (uint8_t)(b[i] + 12u * o);
+            if (b[i] + (uint32_t)tn_edo() * o <= 127u) p[k++] = (uint8_t)(b[i] + (uint32_t)tn_edo() * o);
     if (mode == ARP_DOWN)
         for (i = 0; i < k / 2u; i++) {
             uint8_t x = p[i];
@@ -106,8 +106,8 @@ static void arp_step(uint32_t t)                /* audio: the step due: its note
     if (!len) return;
     if (clamp(trk[t].arp_mode, 0, NARPMODE - 1) == ARP_CHORD) {   /* all of them, an octave up a step */
         uint32_t o = A->pos % oct;
-        for (i = 0; i < len; i++) arp_play(t, p[i] + 12u * o);
-        first = p[0] + 12u * o, A->last = (int32_t)o, A->pos = o + 1u;
+        for (i = 0; i < len; i++) arp_play(t, p[i] + (uint32_t)tn_edo() * o);
+        first = p[0] + (uint32_t)tn_edo() * o, A->last = (int32_t)o, A->pos = o + 1u;
     } else {
         i = clamp(trk[t].arp_mode, 0, NARPMODE - 1) == ARP_RND ? seq_rnd() % len : A->pos % len;
         arp_play(t, p[i]);

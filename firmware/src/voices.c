@@ -118,13 +118,15 @@ static inline int32_t amp_at(int32_t amp0, int32_t damp, int32_t i)
 /* the LFO's (lfo.c, the audio ISR a control step): a track's pitch offset (1/16 semitones: VP16, a voice's pitch, every
  * engine's), and a voice's parameters, one of them moved (else the track's own) */
 static volatile int32_t lfo_p16[NT];
-#define VP16(v) ((int32_t)(v)->note * 16 + lfo_p16[(v)->trk % NT])
+#define VP16(v) (tn_p16((v)->note) + lfo_p16[(v)->trk % NT])
 static const volatile int32_t *lfo_params(uint32_t v, uint32_t t, uint32_t e);
 /* SYSTEM's TUNE (main loop): every source's pitch times 1 + tune_f / 4096 (-50 .. +50 cents: -117 .. +120; finer than
  * VP16's 6.25-cent steps); vinc: a pitch's phase increment, tuned */
 static volatile int32_t tune_f;
 static int32_t vc_fine;                         /* audio: the voice being rendered's own detune, as tune_f (DRONE's
                                                  * BORGA, STOARBMA: dr_fine; 0 between voices) */
+static int32_t vc_tn;                           /* audio: the part of it that is TUNING's (tuning.c tn_fine), for the
+                                                 * sources that take no other detune */
 static int32_t dr_fine[NV], dr_gain[NV] = {32767, 32767, 32767, 32767, 32767, 32767};   /* audio: drone.c's, a voice's
                                                  * detune (tune_f units) and breath (its level, Q15) */
 static int32_t dr_gain_was[NV] = {32767, 32767, 32767, 32767, 32767, 32767};   /* (the last block's: ramped) */
@@ -310,12 +312,13 @@ static uint32_t voices_render(int32_t (*tb)[VB], uint32_t n)
                 for (i = 0; i < n; i++)
                     tb[t][i] = 0;
             }
-            vc_fine = dr_fine[k] + ch_fine[k];  /* (DRONE: its detune and breath, drone.c; WARP's, chaos.c) */
+            vc_tn = tn_fine(v->note);
+            vc_fine = dr_fine[k] + ch_fine[k] + vc_tn;  /* (DRONE: its detune and breath, drone.c; WARP's, chaos.c) */
             if (dr_gain[k] < 32767 || dr_gain_was[k] < 32767) amp0 = mulq15(amp0, dr_gain_was[k]), amp1 = mulq15(amp1, dr_gain[k]);
             dr_gain_was[k] = dr_gain[k];
             ENGINES[v->eng]->block(v, lfo_params(k, t, v->eng), tb[t] + b, amp0, amp1);   /* (the engine it began
                                                  * with; the LFO's on one of its knobs) */
-            vc_fine = 0;
+            vc_fine = 0, vc_tn = 0;
         }
     }
     return used;

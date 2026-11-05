@@ -99,6 +99,7 @@ static char *ui_note(char *s, uint32_t n)       /* a MIDI note's name: "C4", "C#
 {
     static const char NN[12][3] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
     int32_t o = (int32_t)(n / 12u) - 1;
+    if (tn_on()) return tn_name(s, n);          /* (a TUNING: "3.7") */
     s = put_s(s, NN[n % 12u]);
     if (o < 0) return put_u(put_s(s, "-"), (uint32_t)-o);
     return put_u(s, (uint32_t)o);
@@ -370,7 +371,7 @@ static void ui_slab_make(uint32_t k, slab_t *S)
         if (k == 2u) { put_s(S->val, v ? ENGINES[clamp(v - 1, 0, NENG - 1)]->name : "ALL"); return; }
         put_s(S->val, SV_ACT[clamp(v, 0, 2)]);
         return;
-    case PG_SCALE: put_s(S->val, k ? SC_SHORT[clamp(v, 0, NSCALE - 1)] : SC_NOTE[clamp(v, 0, 11)]); return;
+    case PG_SCALE: put_s(S->val, k == 2u ? TN_NAME[clamp(v, 0, NTUNING - 1)] : k ? (tn_on() ? "--" : SC_SHORT[clamp(v, 0, NSCALE - 1)]) : SC_NOTE[clamp(v, 0, 11)]); return;
     case PG_SONG:
         if (k == 0u || k == 2u) {               /* SECTION, REPEATS: "03" */
             v = clamp(v + (k ? 0 : 1), 1, 16);
@@ -1555,26 +1556,28 @@ static void pic_sel(void)                       /* Scale: the 27 keys as rays of
                                                  * rays; the chord of the note last played (none: ROOT's) and its name */
 {
     static const uint8_t BLK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};   /* (from C) */
-    uint32_t base = KEY0 + (uint32_t)(12 * ui_oct), r, n, i, k, lit = 0;
+    uint32_t base = KEY_BASE(ui_oct), edo = (uint32_t)tn_edo(), r, n, i, k, lit = 0;
     uint8_t ns[CH_MAX];
     char l[32], rg[12], *e;
     int32_t x, y[55], s;
     r = ch_last >= (int32_t)base && ch_last < (int32_t)base + 27 ? (uint32_t)ch_last :
+        edo != 12u ? base + (uint32_t)(tn_anchor() + 124 * (int32_t)edo - (int32_t)base) % edo :
         base + (uint32_t)(clamp(sc_root, 0, 11) + 12 - (int32_t)(base % 12u)) % 12u;
     n = chord_notes(sel, r, ns);
     for (i = 0; i < n; i++)
         if (ns[i] >= base && ns[i] < base + 27u) lit |= 1u << (ns[i] - base);
     e = put_s(put_s(l, SC_NOTE[clamp(sc_root, 0, 11)]), " ");
-    put_s(e, SC_NAME[clamp(sc_scale, 0, NSCALE - 1)]);
+    put_s(e, edo != 12u ? TN_NAME[clamp(sc_tuning, 0, NTUNING - 1)] : SC_NAME[clamp(sc_scale, 0, NSCALE - 1)]);
     ui_note(put_s(ui_note(rg, base), "-"), base + 26u);   /* (the keys' range: "F2-G4") */
     ui_caption(l, rg);
     for (i = 0; i < 55; i++) y[i] = 50 + hw_wave(((uint32_t)i * 3u + hw_ph * 2u) & 255u) * 3 / 64;
     for (k = 0; k < 27u; k++) {
         uint32_t pc = (base + k) % 12u;
         int32_t rx = PX0 + 4 + (int32_t)k * 8, in = sc_in((int32_t)(base + k)), ch = (int32_t)(lit >> k & 1u);
-        int32_t y0 = y[(rx - PX0) / 4] + 3 + (BLK[pc] ? 6 : 0), len = ch ? 58 : in ? (BLK[pc] ? 40 : 50) : 10;
+        int32_t blk = edo != 12u ? (base + k + 124u * edo - (uint32_t)tn_anchor()) % edo != 0u : BLK[pc];   /* (a TUNING: ROOT's rays long) */
+        int32_t y0 = y[(rx - PX0) / 4] + 3 + (blk ? 6 : 0), len = ch ? 58 : in ? (blk ? 40 : 50) : 10;
         int32_t px = rx, py = y0;
-        uint16_t c = ch ? ui_acc : BLK[pc] ? UI_KC[1] : UI_KC[0];
+        uint16_t c = ch ? ui_acc : blk ? UI_KC[1] : UI_KC[0];
         for (s = 4; s <= len; s += 4) {
             int32_t nx = rx + hw_wave(((uint32_t)(s * 3 + (int32_t)k * 23) + hw_ph * 2u) & 255u) * 3 * s / (64 * 50);
             uint16_t cc = ui_mix(UI_K, c, (uint32_t)clamp((ch ? 16 : in ? 13 : 4) - s * (ch ? 8 : 9) / (len + 4), 1, 16), 16u);
@@ -1583,7 +1586,7 @@ static void pic_sel(void)                       /* Scale: the 27 keys as rays of
             px = nx, py = y0 + s;
         }
         if (ch) ui_rect(px - 2, py, 5, 5, ui_acc);
-        if ((int32_t)pc == clamp(sc_root, 0, 11)) ui_text(rx - 4 * (int32_t)ui_len(SC_NOTE[pc]) + 1, 112, SC_NOTE[pc], 1, UI_L);
+        if (edo != 12u ? !blk : (int32_t)pc == clamp(sc_root, 0, 11)) ui_text(rx - 4 * (int32_t)ui_len(SC_NOTE[clamp(sc_root, 0, 11)]) + 1, 112, SC_NOTE[clamp(sc_root, 0, 11)], 1, UI_L);
     }
     ui_glow(PX0, 4, y, 55, UI_KC[0]);
     chord_name(sel, r, l);
@@ -1591,7 +1594,7 @@ static void pic_sel(void)                       /* Scale: the 27 keys as rays of
     if (!trk[sel].chord) put_s(l, "OFF: HOLD SEL");
     else {
         for (i = 0, k = 1; i < n; i++) k &= (uint32_t)sc_in(ns[i]);   /* (all of them in the scale: IN KEY) */
-        put_s(put_s(put_u(l, n), n == 1u ? " NOTE" : " NOTES"), k && sc_scale > 0 ? " IN KEY" : "");
+        put_s(put_s(put_u(l, n), n == 1u ? " NOTE" : " NOTES"), k && sc_scale > 0 && edo == 12u ? " IN KEY" : "");
     }
     if (x + 8 * ui_len(l) > 228) {              /* (a long name: the short of it) */
         if (trk[sel].chord) put_s(put_u(l, n), " NOTES");
@@ -1999,7 +2002,7 @@ static uint32_t ui_pic_key(void)
         UI_H(trk[t].level), UI_H(trk[t].dly), UI_H(trk[t].rev), UI_H(trk[t].grn), UI_H(trk[t].pan), UI_H(trk[t].eng),
             UI_H(trk[t].ftype), UI_H(trk[t].fpos);
     UI_H(trk[sel].fm_alg), UI_H(trk[sel].fm_fb), UI_H(fm_op), UI_H(trk[sel].p[ENG_FM][0]);
-    UI_H(trk[sel].latch), UI_H(trk[sel].chord), UI_H(trk[sel].ch_type), UI_H(trk[sel].ch_voice), UI_H(sc_root), UI_H(sc_scale);
+    UI_H(trk[sel].latch), UI_H(trk[sel].chord), UI_H(trk[sel].ch_type), UI_H(trk[sel].ch_voice), UI_H(sc_root), UI_H(sc_scale), UI_H(sc_tuning);
     if (PAGES[page].btn == BTN_SEL) UI_H(ch_last), UI_H(ui_oct);
     UI_H(trk_quiet);
     if (page == PG_PERFORM) {                   /* (V2: GENERATE's tiles too) */

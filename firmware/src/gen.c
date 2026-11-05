@@ -48,11 +48,11 @@ static uint32_t gen_rnd(uint32_t n)
 }
 static uint32_t gen_low(uint32_t t)             /* track t's range: its lowest note, */
 {
-    return (uint32_t)(GEN_C3 + 12 * clamp(gen_oc[t], -3, 3));
+    return (uint32_t)clamp(GEN_C3 + tn_edo() * clamp(gen_oc[t], -3, 3), 1, 127);
 }
 static uint32_t gen_high(uint32_t t)            /* .. its highest */
 {
-    uint32_t h = gen_low(t) + 12u * (uint32_t)clamp(gen_rg[t], 1, 3) - 1u;
+    uint32_t h = gen_low(t) + (uint32_t)tn_edo() * (uint32_t)clamp(gen_rg[t], 1, 3) - 1u;
     return h > 127u ? 127u : h;
 }
 static uint32_t gen_smp(uint32_t t)            /* (V2) a SAMPLE track: its loop (LENGTH, as the screen has it, at the

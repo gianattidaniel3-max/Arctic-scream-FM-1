@@ -121,6 +121,7 @@
 #include "dsp.c"
 #include "wear.c"
 #include "samples.c"
+#include "tuning.c"                             /* SCALE's TUNING: the octave in N equal steps */
 #include "voices.c"
 #include "grain.c"
 #ifdef DINGHY_HOST
@@ -667,8 +668,9 @@ static void note_on(uint32_t t, uint32_t id, uint32_t note, uint32_t src, int ec
         uint32_t k, m = 0;
         for (i = 0; i < n; i++) {
             uint32_t x = ns[i];
-            while (x > gen_hi && x >= 12u) x -= 12u;
-            while (x < gen_lo) x += 12u;
+            while (x > gen_hi && x >= (uint32_t)tn_edo()) x -= (uint32_t)tn_edo();
+            while (x < gen_lo) x += (uint32_t)tn_edo();
+            if (x > 127u) x = 127u;
             for (k = 0; k < m && ns[k] != x; k++)
                 ;
             if (k == m) ns[m++] = (uint8_t)x;
@@ -948,6 +950,8 @@ static int32_t ch_last = -1;                    /* SEL's picture: the note last 
 
 /* ---- the screen: plain text, a row per value; only what changed is drawn */
 #define KEY0 41u                                /* key 0 = F2 (Arctic Scream p0larpatch: an octave down, for drones) */
+#define KEY_BASE(o) ((uint32_t)clamp((int32_t)KEY0 + tn_edo() * (o), 1, 101))   /* .. at OCT o: a real octave, in TUNING's steps
+                                                 * (the 27 keys within the notes) */
 #include "gen.c"                                /* GR!MM V2: GENERATE (FX held + the black keys) */
 #define OCT_BOTH (1u << BTN_OCT_DOWN | 1u << BTN_OCT_UP)
 #define HOLD_MS 600u                            /* a button held this long: its hold function (HOME: SYSTEM) */
@@ -993,7 +997,7 @@ static const page_t PAGES[NPAGE] = {
     {"SOURCE", BTN_EDIT, 1, 1, 1, {"SOURCE", "LATCH", "", ""}},
     {"ENV", BTN_ENV, 1, 1, 1, {"ATTACK", "DECAY", "SUSTAIN", "RELEASE"}},
     {"LFO", BTN_LFO, 1, 1, 1, {"RATE", "DEPTH", "DESTINATION", "SHAPE"}},
-    {"SCALE", BTN_SEL, 1, 0, 1, {"ROOT", "SCALE", "", ""}},
+    {"SCALE", BTN_SEL, 1, 0, 1, {"ROOT", "SCALE", "TUNING", ""}},
     {"CHORD", BTN_SEL, 1, 0, 1, {"CHORD TYPE", "VOICING", "", ""}},
     {"SONG", BTN_GLO, 1, 0, 1, {"SECTION", "PATTERN", "REPEATS", "MODE"}},
     {"HOME", BTN_HOME, 1, 1, 1, {"VOLUME", "CUTOFF", "WARP", "MORPH"}},   /* (the track's: its LEVEL, its filter,
@@ -1086,7 +1090,7 @@ static volatile int32_t *knob_param(uint32_t pg, uint32_t k)   /* what KNOB k + 
                         &trk[sel].lfo_shape;
     case PG_DRONE: return k == 0u ? &trk[sel].dr_borga : k == 1u ? &trk[sel].dr_storm : k == 2u ? &trk[sel].dr_rise :
                           &trk[sel].latch;
-    case PG_SCALE: return k == 0u ? &sc_root : k == 1u ? &sc_scale : 0;
+    case PG_SCALE: return k == 0u ? &sc_root : k == 1u ? &sc_scale : k == 2u ? &sc_tuning : 0;
     case PG_CHORD: return k == 0u ? &trk[sel].ch_type : k == 1u ? &trk[sel].ch_voice : 0;
     case PG_ARP: return k == 0u ? &trk[sel].arp_mode : k == 1u ? &trk[sel].arp_rate : k == 2u ? &trk[sel].arp_oct :
                         &trk[sel].arp_gate;
@@ -1120,7 +1124,7 @@ static int32_t knob_max(uint32_t pg, uint32_t k)
     return pg == PG_SOUND ? sel_engine()->max[k] : pg == PG_SOURCE ? (k ? 1 : (int32_t)NENG - 1) :
            pg == PG_GRID ? GRID_MAX[k] : pg == PG_PATTERN ? PATT_MAX[k] :
            pg == PG_SOUNDS ? (k == 0u ? SND_N - 1 : k == 1u ? NCAT - 1 : k == 2u ? (int32_t)NENG : 2) :
-           pg == PG_PROJECTS ? 3 : pg == PG_SCALE ? (k ? NSCALE - 1 : 11) : pg == PG_CHORD ? (k ? NVOICING - 1 : NCHORD - 1) :
+           pg == PG_PROJECTS ? 3 : pg == PG_SCALE ? (k == 2u ? NTUNING - 1 : k ? NSCALE - 1 : 11) : pg == PG_CHORD ? (k ? NVOICING - 1 : NCHORD - 1) :
            pg == PG_ARP ? (k == 0u ? NARPMODE - 1 : k == 1u ? NARPRATE - 1 : k == 2u ? 4 : 100) :
            pg == PG_LFO ? (k == 0u ? 127 : k == 1u ? 100 : k == 2u ? NLFODEST - 1 : NLFOSHAPE - 1) :
            pg == PG_DRONE ? (k < 2u ? 100 : k == 2u ? DR_NRISE - 1 : 1) :
@@ -1206,7 +1210,7 @@ static void knob_text(uint32_t pg, uint32_t k, char *s)   /* knob k's value on p
         else if (k == 2u) put_pc(s, v);
         else put_ms(s, 10u * pow2_q16((v * 33) >> 1));
         return;
-    case PG_SCALE: if (k < 2u) put_s(s, k ? SC_NAME[clamp(v, 0, NSCALE - 1)] : SC_NOTE[clamp(v, 0, 11)]); return;
+    case PG_SCALE: if (k < 3u) put_s(s, k == 2u ? TN_NAME[clamp(v, 0, NTUNING - 1)] : k ? (tn_on() ? "12 EDO ONLY" : SC_NAME[clamp(v, 0, NSCALE - 1)]) : SC_NOTE[clamp(v, 0, 11)]); return;
     case PG_CHORD: if (k < 2u) put_s(s, k ? VC_NAME[clamp(v, 0, NVOICING - 1)] : CH_SHORT[clamp(v, 0, NCHORD - 1)]); return;
     case PG_SONG:
         if (k == 0u || k == 2u) put_u(s, (uint32_t)v + (k ? 0u : 1u));
@@ -1929,7 +1933,7 @@ static void app_main(void)
 #endif
 
     for (;;) {
-        uint32_t keys, down, up, rel, b, n, lit = 0, base = (uint32_t)(KEY0 + 12 * set.oct);
+        uint32_t keys, down, up, rel, b, n, lit = 0, base = KEY_BASE(set.oct);
         uint8_t st, d1, d2;
         int32_t d;
         platform_poll();
@@ -2282,7 +2286,7 @@ static void app_main(void)
         }
         midi_out();                             /* the notes out over USB-MIDI (the echoes from the audio ISR) */
 
-        base = (uint32_t)(KEY0 + 12 * set.oct);
+        base = KEY_BASE(set.oct);
         for (k = 0; k < nlat && k < NV; k++) {  /* the selected track's notes, on the keys they came from: the
                                                  * physical key (never the note after SCALE or chord), a MIDI note's
                                                  * number as it came, a step's note */
