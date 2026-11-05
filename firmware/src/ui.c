@@ -391,6 +391,13 @@ static void ui_slab_make(uint32_t k, slab_t *S)
         else if (k == 2u) ui_label(S->val, lfo_dest_name(v));
         else put_s(S->val, LFO_SHAPE_SHORT[clamp(v, 0, NLFOSHAPE - 1)]);
         return;
+    case PG_BANK:
+        if (k == 0u) put_s(S->val, BK_NAME[clamp(v, 0, NBKMODE - 1)]);
+        else ui_3(S->val, ((uint32_t)clamp(v, 0, 127) * 100u + 63u) / 127u);
+        return;
+    case PG_BANK2:
+        if (k == 0u) put_ms(S->val, ((uint32_t)(1 + v * v / 36) * 174u / 10u) << 16);
+        return;
     case PG_DRONE:                              /* BORGA, STOARBMA %, GOHCCAT ("8BAR"), LATCH */
         if (k < 2u) ui_3(S->val, (uint32_t)clamp(v, 0, 100));
         else if (k == 2u) dr_rise_text(S->val, v, "");
@@ -520,6 +527,7 @@ static void ui_tint(uint32_t pg)
     case PG_ENV: a = BW_AMBER, b = BW_TEAL, c = BW_PERIWINKLE, x = BW_MAGENTA; break;
     case PG_LFO: a = BW_PINK, b = BW_CYAN, c = BW_AMBER, x = UI_W; break;
     case PG_DRONE: a = BW_CYAN, b = BW_VIOLET, c = BW_TEAL, x = BW_MAGENTA; break;
+    case PG_BANK: case PG_BANK2: a = BW_AMBER, b = BW_CYAN, c = BW_VIOLET, x = BW_TEAL; break;
     case PG_SOUND: case PG_SOURCE: case PG_FMALGO: case PG_FMOP: a = BW_PERIWINKLE, b = BW_TEAL, c = BW_PINK, x = BW_AMBER; break;
     case PG_GRID: case PG_PATTERN: a = BW_VIOLET, b = BW_CYAN, c = BW_PINK, x = BW_MAGENTA; break;
     case PG_SCALE: case PG_CHORD: a = BW_LAVENDER, b = BW_CYAN, c = BW_TEAL, x = BW_AMBER; break;
@@ -1235,7 +1243,7 @@ static void pic_env(void)                       /* Env: the shape of the track's
 
 static int ui_anim_page(uint32_t p)             /* the pages whose ribbons move (ui_update) */
 {
-    return p == PG_DRONE || p == PG_ENV || p == PG_TAPE || p == PG_GRAIN || p == PG_DELAY || p == PG_SPACE || p == PG_LFO ||
+    return p == PG_DRONE || p == PG_BANK || p == PG_BANK2 || p == PG_ENV || p == PG_TAPE || p == PG_GRAIN || p == PG_DELAY || p == PG_SPACE || p == PG_LFO ||
            p == PG_MIX1 || p == PG_MIX2 || p == PG_MASTER || p == PG_DRIVE || p == PG_SOUND || p == PG_FMOP || p == PG_FMALGO || p == PG_SCALE ||
            p == PG_CHORD || p == PG_PERFORM || p == PG_ARP;
 }
@@ -1553,6 +1561,49 @@ static void pic_pattern(void)                   /* SeqSet: the patterns (A; B ..
     }
 }
 
+static void ui_keys(int32_t p0, int32_t edo)    /* the twelve normal notes as a keyboard to the pitch: a semitone's cell is
+                                                 * edo x 2 / 3 px wide, key 1 (at p0) under the first ray */
+{
+    static const uint8_t BLK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};   /* (from C) */
+    int32_t sm, rx0 = PX0 + 4;
+    for (sm = (p0 >= 0 ? p0 / 16 : -((15 - p0) / 16)) - 2;; sm++) {
+        int32_t xc = rx0 + (sm * 16 - p0) * edo / 24, x0 = xc - edo / 3, x1 = xc + edo / 3, pc = (sm % 12 + 12) % 12;
+        uint16_t c = BLK[pc] ? UI_D0 : pc == clamp(sc_root, 0, 11) ? ui_acc : UI_L0;
+        if (x0 > 228) break;
+        x0 = x0 < 12 ? 12 : x0, x1 = x1 > 228 ? 228 : x1;
+        if (x1 >= x0) ui_rect(x0, 44, x1 - x0 + 1 - (edo >= 10 ? 1 : 0), 12, c);
+        if (BLK[pc] && x1 >= x0 && edo >= 10) ui_rect(x0, 44, x1 - x0, 1, UI_M0);
+    }
+}
+static void pic_bank(void)                      /* BANK: the keyboard of SCALE, and a line at each band's pitch, as long as
+                                                 * it rings; the bands' notes */
+{
+    uint32_t base = KEY_BASE(ui_oct), i;
+    int32_t edo = tn_edo(), a = tn_anchor(), p0 = a * 16 + ((int32_t)base - a) * 192 / edo, rx0 = PX0 + 4, on = trk[sel].bk_mode > 0;
+    char l[32], rg[12], *e;
+    e = put_s(l, BK_NAME[clamp(trk[sel].bk_mode, 0, NBKMODE - 1)]);
+    if (on && edo != 12) put_s(e, edo == 24 && trk[sel].bk_mode == BK_GHOST ? " FIELD 2" : " EDO");
+    ui_note(put_s(ui_note(rg, base), "-"), base + 26u);
+    ui_caption(l, rg);
+    ui_keys(p0, edo);
+    for (i = 0; on && i < BK_BANDS; i++) {
+        int32_t x = rx0 + (bk[sel].p16[i] - p0) * edo / 24, lv = bk[sel].lv[i], h = 4;
+        while (lv > 0 && h < 54) lv >>= 1, h += 7;
+        if (x >= 12 && x <= 228) ui_rect(x - 1, 58, 3, h, (bk[sel].on >> i & 1u) ? UI_KC[i] : UI_M0), ui_rect(x - 1, 46, 3, 10, UI_KC[i]);
+    }
+    if (on) {
+        char *q = l;
+        for (i = 0; i < BK_BANDS; i++) {
+            int32_t p = bk[sel].p16[i];
+            if (!(bk[sel].on >> i & 1u)) continue;
+            q = ui_note12(q, (uint32_t)((p + 8) / 16));
+            *q++ = ' ';
+        }
+        *q = 0;
+        ui_text(12, 126, l, 1, UI_W);
+        ui_text(12, 146, trk[sel].bk_wind > 0 ? "WIND ON" : "PLAY THROUGH IT", 1, UI_M);
+    } else ui_text(12, 126, "KNOB 1: CHORD HARM GHOST", 1, UI_M);
+}
 static void pic_sel(void)                       /* Scale: where each key stands. Above, the twelve normal notes as a
                                                  * keyboard, drawn to the pitch; under it the 27 keys, a ray a key at its
                                                  * true pitch: at 12 EDO under its own note, at another TUNING grey on a
@@ -1564,7 +1615,7 @@ static void pic_sel(void)                       /* Scale: where each key stands.
     uint32_t base = KEY_BASE(ui_oct), edo = (uint32_t)tn_edo(), r, n, i, k, lit = 0, held = 0;
     uint8_t ns[CH_MAX];
     char l[32], rg[12], *e;
-    int32_t x, a = tn_anchor(), p0 = a * 16 + ((int32_t)base - a) * 192 / (int32_t)edo, rx0 = PX0 + 4, sm;
+    int32_t x, a = tn_anchor(), p0 = a * 16 + ((int32_t)base - a) * 192 / (int32_t)edo, rx0 = PX0 + 4;
     r = ch_last >= (int32_t)base && ch_last < (int32_t)base + 27 ? (uint32_t)ch_last :
         edo != 12u ? base + (uint32_t)(a + 124 * (int32_t)edo - (int32_t)base) % edo :
         base + (uint32_t)(clamp(sc_root, 0, 11) + 12 - (int32_t)(base % 12u)) % 12u;
@@ -1580,15 +1631,7 @@ static void pic_sel(void)                       /* Scale: where each key stands.
     else put_s(e, TN_NAME[clamp(sc_tuning, 0, NTUNING - 1)]);
     ui_note(put_s(ui_note(rg, base), "-"), base + 26u);   /* (the keys' range: "F2-G4") */
     ui_caption(l, rg);
-    /* the keyboard: a semitone's cell is edo x 2 / 3 px wide, on its pitch */
-    for (sm = (p0 >= 0 ? p0 / 16 : -((15 - p0) / 16)) - 2;; sm++) {
-        int32_t xc = rx0 + (sm * 16 - p0) * (int32_t)edo / 24, x0 = xc - (int32_t)edo / 3, x1 = xc + (int32_t)edo / 3, pc = (sm % 12 + 12) % 12;
-        uint16_t c = BLK[pc] ? UI_D0 : pc == clamp(sc_root, 0, 11) ? ui_acc : UI_L0;
-        if (x0 > 228) break;
-        x0 = x0 < 12 ? 12 : x0, x1 = x1 > 228 ? 228 : x1;
-        if (x1 >= x0) ui_rect(x0, 44, x1 - x0 + 1 - (edo >= 10u ? 1 : 0), 12, c);
-        if (BLK[pc] && x1 >= x0 && edo >= 10u) ui_rect(x0, 44, x1 - x0, 1, UI_M0);
-    }
+    ui_keys(p0, (int32_t)edo);
     for (k = 0; k < 27u; k++) {
         int32_t rx = rx0 + (int32_t)k * 8, in = sc_in((int32_t)(base + k)) && !(tn_field_on() && nlat && tn_field(base + k) != tn_field(lat_note[0])), ch = (int32_t)(lit >> k & 1u), hd = (int32_t)(held >> k & 1u);
         int32_t len = hd || ch ? 44 : in ? 34 : 10, y0 = hd ? 44 : 58;
@@ -2004,6 +2047,7 @@ static void ui_pic_draw(void)
     case PG_ARP: pic_arp(); return;
     case PG_LFO: pic_lfo(); return;
     case PG_DRONE: pic_drone(); return;
+    case PG_BANK: case PG_BANK2: pic_bank(); return;
     case PG_SONG: pic_song(); return;
     case PG_PERFORM: pic_perform(); return;
     case PG_SOUNDS: pic_sounds(); return;

@@ -47,7 +47,7 @@
 #define LOCK_PK 288u                            /* a track's step locks: 64 x the four values, 64 x 4 bits which */
 #define SLOT_LEN(tn, sq, lk) (4u + NT * ((tn) + (sq) + (lk)))   /* a slot: [0] used, its tracks, sequences, locks */
 #define SONG_PK 20u                             /* the song: its chain (16), MODE, the mutes and solos, TUNING (its steps; 0: 12), a TUNING's own scale + 1 | FIELD << 7 */
-#define FX2_PK 8u                               /* (V2, version 8) MASTER's four, DRIVE's four */
+#define FX2_PK 28u                              /* (V2, version 8) MASTER's four, DRIVE's four; (version 9) BANK: five a track */
 #define WORK_LEN(tn, sg, sq, lk, fm, fx) (NT * ((tn) + (sq) + (lk)) + 16u + 4u + (sg) + (fm) + (fx))   /* the working
                                                  * project: tracks, effects, tempo, slot, .., sequences, locks, the
                                                  * song, the FM patches, MASTER and DRIVE (an older version's sizes: sg
@@ -59,10 +59,10 @@
 #define OBJ_HDR 12u                             /* magic, the save count, type, version, length */
 #define OBJ_MAGIC 0x4B504441u                   /* "ADPK" (Arctic Scream p0larpatch's own: its tracks are longer than GR!MM's,
                                                  * so neither reads the other's saves; GR!MM's was "GRMK") */
-#define OBJ_VER 8u
+#define OBJ_VER 9u
 #define SLS_VER 6u                              /* the slots' stream (its layout as version 6's) */
-#define NOBJV 7u
-static const uint16_t OBJ_VERS[NOBJV][7] = {{8, TRK_PK, 20, 260, 288, FM_ALL, FX2_PK}, {7, TRK_PK, 20, 260, 288, FM_ALL, 0},
+#define NOBJV 8u
+static const uint16_t OBJ_VERS[NOBJV][7] = {{9, TRK_PK, 20, 260, 288, FM_ALL, FX2_PK}, {8, TRK_PK, 20, 260, 288, FM_ALL, 8}, {7, TRK_PK, 20, 260, 288, FM_ALL, 0},
                                             {6, 52, 20, 260, 288, 0, 0}, {5, 52, 20, 196, 0, 0, 0},
                                             {4, 52, 0, 196, 0, 0, 0}, {3, 48, 0, 196, 0, 0, 0},
                                             {2, 44, 0, 196, 0, 0, 0}};   /* the versions loaded, newest first: a
@@ -568,6 +568,12 @@ static void pk_work(uint8_t *q)
     q[2] = (uint8_t)clamp(mf_type, 0, NFTYPE - 1), q[3] = (uint8_t)clamp(mf_pos, 0, NMPOS - 1);
     q[4] = (uint8_t)clamp(dr_amt, 0, 127), q[5] = (uint8_t)clamp(dr_type, 0, NDTYPE - 1);
     q[6] = (uint8_t)clamp(dr_tone, 0, 127), q[7] = (uint8_t)clamp(dr_mix, 0, 127);
+    q += 8;
+    for (t = 0; t < NT; t++, q += 5) {          /* BANK */
+        q[0] = (uint8_t)clamp(trk[t].bk_mode, 0, NBKMODE - 1), q[1] = (uint8_t)clamp(trk[t].bk_ring, 0, 127);
+        q[2] = (uint8_t)clamp(trk[t].bk_mix, 0, 127), q[3] = (uint8_t)clamp(trk[t].bk_wind, 0, 127);
+        q[4] = (uint8_t)clamp(trk[t].bk_glacier, 0, 127);
+    }
 }
 enum { UW_GLOBALS = 1, UW_CHAIN = 2 };
 static void uk_work(const uint8_t *q, uint32_t f, const uint16_t *vs)   /* (f: UW_GLOBALS, the effects, tempo, slot,
@@ -594,6 +600,12 @@ static void uk_work(const uint8_t *q, uint32_t f, const uint16_t *vs)   /* (f: U
         mf_type = fx ? clamp(x[2], 0, NFTYPE - 1) : FT_LP, mf_pos = fx ? clamp(x[3], 0, NMPOS - 1) : MP_END;
         dr_amt = fx ? clamp(x[4], 0, 127) : 0, dr_type = fx ? clamp(x[5], 0, NDTYPE - 1) : DT_SOFT;
         dr_tone = fx ? clamp(x[6], 0, 127) : 127, dr_mix = fx ? clamp(x[7], 0, 127) : 127;
+        for (t = 0; t < NT; t++) {              /* (BANK; saved before it: off) */
+            const uint8_t *y = fx >= 28u ? x + 8u + t * 5u : 0;
+            trk[t].bk_mode = y ? clamp(y[0], 0, NBKMODE - 1) : 0, trk[t].bk_ring = y ? clamp(y[1], 0, 127) : 0;
+            trk[t].bk_mix = y ? clamp(y[2], 0, 127) : 0, trk[t].bk_wind = y ? clamp(y[3], 0, 127) : 0;
+            trk[t].bk_glacier = y ? clamp(y[4], 0, 127) : 0;
+        }
     }
     if (globals && !sg) sc_tuning = TN_12, sc_field = 0;
     if (!sg) return;                            /* (saved before the song: as it is) */
