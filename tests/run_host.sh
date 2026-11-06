@@ -38,6 +38,12 @@ python3 tests/fx_test.py build/host/grimm
 python3 tests/quick_test.py build/host/grimm
 # SCALE's TUNING: every EDO's pitches in the audio, OCT, chords, saves (tests/tuning_test.py)
 python3 tests/tuning_test.py build/host/grimm
+# LFO's BANK: its bands' pitches in the audio, its ring, level, GLACIER and saves (tests/bank_test.py)
+python3 tests/bank_test.py build/host/grimm
+# The DRUM source: hits, KEYS at the TUNING's pitches, DRUM 1 and 2, through BANK, saves (tests/drum_test.py)
+python3 tests/drum_test.py build/host/grimm
+# SYSTEM 3's CC MAP: fixed CCs by channel, MIDI LEARN first, saved (tests/ccmap_test.py)
+python3 tests/ccmap_test.py build/host/grimm
 # LATCH: every factory sound, SYSTEM 3 both ways, EDIT, SEL + OCT+, slots, the project, PHYS (tests/latch_test.py)
 python3 tests/latch_test.py build/host/grimm
 # GR!MM V2: GENERATE (FX held + the black keys): in the SCALE, the pattern unheard and unchanged (tests/gen_test.py)

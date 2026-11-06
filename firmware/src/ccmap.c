@@ -11,6 +11,8 @@ static const cc_map_t CC_MAP[] = {
     {28, PG_LFO, 0}, {29, PG_LFO, 1}, {30, PG_LFO, 2}, {31, PG_LFO, 3},
     {85, PG_DRONE, 0}, {86, PG_DRONE, 1}, {87, PG_DRONE, 2},
     {102, PG_BANK, 0}, {103, PG_BANK, 1}, {104, PG_BANK, 2}, {105, PG_BANK, 3}, {106, PG_BANK2, 0},
+    {107, PG_DRUM1, 0}, {108, PG_DRUM1, 1}, {109, PG_DRUM1, 2}, {110, PG_DRUM1, 3},
+    {111, PG_DRUM2, 0}, {112, PG_DRUM2, 1}, {113, PG_DRUM2, 2}, {114, PG_DRUM2, 3},
     {115, PG_SCALE, 0}, {116, PG_SCALE, 1}, {117, PG_SCALE, 2}, {118, PG_SCALE, 3},
 };
 static void cc_map(uint32_t cc, uint32_t val, uint32_t ch)

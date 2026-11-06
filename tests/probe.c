@@ -87,6 +87,10 @@ static void host_probe(void)
             printf(" lv %u %u %u ch1 %d snd1 %s", lv_rvk, lv_dlk, lv_pre, (int)trk[0].chord, nm[0] ? nm : "-");
         }
         printf(" tuning %d scale %d field %d", (int)tn_edo(), (int)sc_now(), (int)sc_field);
+        printf(" drum %d,%d,%d,%d,%d,%d,%d", (int)trk[sel].eng, (int)trk[sel].p[ENG_DRUM][0], (int)trk[sel].p[ENG_DRUM][1], (int)trk[sel].p[ENG_DRUM][2], (int)trk[sel].p[ENG_DRUM][3], (int)dm_v[sel][0], (int)dm_v[sel][1]);
+        printf(" mute %u solo %u chord %d latch2 %d", (unsigned)trk_mute, (unsigned)trk_solo, (int)trk[sel].chord, (int)trk[sel].latch);
+        printf(" trk %d lvl %d cut %d res %d rev %d ccm %d", (int)sel, (int)trk[sel].level, (int)trk[sel].cut, (int)trk[sel].res, (int)trk[sel].rev, (int)(set.latch >> 1 & 1u));
+        printf(" bank %d,%d,%d,%d,%d", (int)trk[sel].bk_mode, (int)trk[sel].bk_ring, (int)trk[sel].bk_mix, (int)trk[sel].bk_wind, (int)trk[sel].bk_glacier);
         printf(" voices");                      /* (each voice: its stage (0 off, 1 attack, 2 sustain, 3 release, 4
                                                  * fade), track, note, in the notes-on list or not) */
         for (i = 0; i < NV; i++) printf(" %u/%u/%u/%d", (unsigned)vc[i].stage, (unsigned)vc[i].trk + 1u,

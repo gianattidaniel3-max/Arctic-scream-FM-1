@@ -107,7 +107,7 @@ class Link:
         dev.link.close()
         if dev.id.loader:
             sys.exit(f"the FM-1 is in update mode ({ident}): finish the install first (tools\\fm1_install.py)")
-        if ident != "FM-1_977":                  # (Arctic Scream 1.x)
+        if ident not in ("FM-1_977", "FM-1_978"):                  # (Arctic Scream 1.x)
             sys.exit(f"the FM-1 runs {ident}, not Arctic Scream (FM-1_977): install Arctic Scream first (tools\\fm1_install.py)")
         out = fi.pair_output(name, backend.output_names())
         if not out:

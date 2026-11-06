@@ -227,6 +227,15 @@ North Sami names.
   the other. With FIELD on, what sounds together stays in one field, over all four tracks: the first note sounding sets it,
   and a note of the other field takes the next step. With nothing sounding, the next note may start in either. A latched
   note or a drone counts as sounding.
+- **BANK** (LFO's third page, a track's own): four narrow resonators in front of the track's filter and sends, tuned by what
+  the track plays, at the TUNING's exact pitches. **MODE:** OFF, CHORD (the notes held; fewer than four: octaves up), HARM
+  (harmonics 1, 2, 3, 5 of the lowest note), GHOST (CHORD a quarter tone up: at 24 EDO, the other field). **RING:** how
+  narrow and how long. **MIX:** dry to bank alone. **WIND:** noise into the bank, so the track sings its pitches over
+  silence. When you let go, the bank stays on its last pitches. **BANK 2 > GLACIER:** a new pitch glides there, up to ~8 s.
+- **DRUM** (a source, EDIT > SOURCE): one drum on the track, from FNTSMG-1 by fantasmogenesis. **MODEL:** MEMBRANE, HAIL.
+  SOUND has its three main knobs, **DRUM 1** and **DRUM 2** the rest, and **KEYS** (the keys tune it, at the TUNING's
+  pitches), **WANDER** (each hit's pitch off at random), **HUMAN** (each hit's level off at random). A new MODEL starts from
+  its own sound. Saved with the project; a saved sound keeps MODEL and the three main knobs only.
 - **CHORD TYPE:** SCALE (the scale's triad), MIN, MAJ, SUS2, SUS4, FIFTH, MIN7, MAJ7, DIM, ADD9, CLUSTER, SCALE7 (the
   scale's four notes, 1-3-5-7), QUART3 and QUART4 (stacked fourths), QUINT (stacked fifths), HARM (harmonics 4:5:6:7, at
   each tuning's nearest steps).
@@ -423,7 +432,12 @@ FM-1, not the project.
 - **MIDI CHANNEL:** `1-4` puts T1–T4 on channels 1–4 (or higher, up to `13-16`); `ALL > SEL` sends everything to the
   selected track; `CH 1 > SEL` … `CH 16 > SEL` sends only that channel to the selected track and ignores the others.
 - **SCREEN OFF:** the screen goes dark after the chosen time; the music goes on. The first touch only wakes it.
-- **MIDI LEARN:** set LEARN, turn a knob on the FM-1, then move one on your controller. Up to 32 links.
+- **MIDI LEARN:** set LEARN, turn a knob on the FM-1, then move one on your controller. Up to 32 links. A link ignores the
+  MIDI channel, and takes priority over the CC MAP.
+- **CC MAP** (SYSTEM 3, KNOB 2, off by default): fixed CCs with nothing to learn. The channel picks the track, as MIDI CHANNEL
+  says. 7 level, 10 pan, 74 cutoff, 71 resonance, 91 reverb send, 94 delay send, 20-23 SOUND's knobs, 24-27 ENV, 28-31 LFO,
+  85-87 DRONE, 102-105 BANK, 106 GLACIER, 107-110 DRUM 1, 111-114 DRUM 2; for all tracks, 115-118 ROOT, SCALE, TUNING, FIELD.
+  Switches, 64 and up on, under 64 off: 88 mute, 89 solo, 90 chord mode, 92 LATCH; for all tracks, 119 PLAY.
 - **SEQ MIDI OUT:** sends the sequencer's and the arpeggiator's notes out over USB.
 - **SAMPLES:** CLEAR and **OCT+** empties all four sample slots (stop and let the sound die out first).
 - **CLOCK:** `INT`, the FM-1's own tempo. `I+OUT`, the same, and its MIDI clock out over USB (START, STOP and 24 pulses a

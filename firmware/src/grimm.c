@@ -292,6 +292,13 @@ static void mix_tracks(int32_t *out, uint32_t used, uint32_t n)   /* the soundin
     uint32_t t, k;
     for (t = 0; t < NT; t++) {
         int32_t *x = tbuf[t];
+        if (dm_wanted(t)) {                     /* (DRUM: its hit and its tail) */
+            if (!(used >> t & 1u)) {
+                for (k = 0; k < n; k++) x[k] = 0;
+                used |= 1u << t;
+            }
+            dm_run(t, x, n);
+        }
         if (bk_wanted(t, used)) {               /* (BANK: its ring and its WIND keep a track sounding) */
             if (!(used >> t & 1u)) {
                 for (k = 0; k < n; k++) x[k] = 0;
@@ -700,6 +707,7 @@ static void note_on(uint32_t t, uint32_t id, uint32_t note, uint32_t src, int ec
         }
         n = m;
     }
+    if (trk[t].eng == ENG_DRUM && n) dm_req[t] = (int16_t)(ns[0] + 1u);   /* (a hit: dm_run, audio) */
     if (gs && n > gs) n = gs;                   /* (V2: GENERATE sharing: its chord within its share) */
     for (i = 0; i < n; i++) {
         if (i < no)                             /* its own voice again */
@@ -1006,7 +1014,7 @@ static char *put_ms(char *s, uint32_t q16)      /* a time, ms in Q16: "5 ms", "1
  * tap opens its first page, again the next (round); SYSTEM is HOME's, held */
 enum { PG_SOUND, PG_SOURCE, PG_ENV, PG_LFO, PG_SCALE, PG_CHORD, PG_SONG, PG_HOME, PG_MIX1, PG_MIX2, PG_SYSTEM,
        PG_SYS2, PG_SOUNDS, PG_PROJECTS, PG_ARP, PG_GRID, PG_PATTERN, PG_TAPE, PG_GRAIN, PG_DELAY, PG_SPACE, PG_PERFORM,
-       PG_TRACK, PG_FMALGO, PG_FMOP, PG_DRONE, PG_MASTER, PG_DRIVE, PG_SYS3, PG_BANK, PG_BANK2, NPAGE };   /* (the newer last: MIDI LEARN's links keep the pages' numbers they
+       PG_TRACK, PG_FMALGO, PG_FMOP, PG_DRONE, PG_MASTER, PG_DRIVE, PG_SYS3, PG_BANK, PG_BANK2, PG_DRUM1, PG_DRUM2, NPAGE };   /* (the newer last: MIDI LEARN's links keep the pages' numbers they
                                                  * have; in their button's round by pg_key. TRACK: gone in step 25, its
                                                  * number kept: sys_load moves its links onto HOME) */
 typedef struct {
@@ -1053,6 +1061,8 @@ static const page_t PAGES[NPAGE] = {
     {"SYSTEM 3", BTN_HOME, 1, 0, 0, {"LATCH", "CC MAP", "", ""}},   /* (V2: a NEW project's tracks' LATCH) */
     {"BANK", BTN_LFO, 1, 1, 1, {"MODE", "RING", "MIX", "WIND"}},   /* (LFO's third and fourth: bank.c) */
     {"BANK 2", BTN_LFO, 1, 1, 1, {"GLACIER", "", "", ""}},
+    {"DRUM 1", BTN_EDIT, 1, 1, 1, {"", "", "", ""}},   /* (a DRUM track's only: pg_on; its MODEL's names: knob_name) */
+    {"DRUM 2", BTN_EDIT, 1, 1, 1, {"", "KEYS", "WANDER", "HUMAN"}},
 };
 static uint32_t pg_key(uint32_t p)              /* its place in its button's round */
 {
@@ -1060,6 +1070,7 @@ static uint32_t pg_key(uint32_t p)              /* its place in its button's rou
 }
 static int pg_on(uint32_t p)                    /* in its button's round now (FM ALGO, FM OP: an FM track's only) */
 {
+    if (p == PG_DRUM1 || p == PG_DRUM2) return clamp(trk[sel].eng, 0, NENG - 1) == ENG_DRUM;
     return PAGES[p].cyc && ((p != PG_FMALGO && p != PG_FMOP) || clamp(trk[sel].eng, 0, NENG - 1) == ENG_FM);
 }
 static volatile int32_t fm_op;                  /* FM ALGO's OP: the operator FINE and FM OP's knobs edit (0 = OP1) */
@@ -1117,6 +1128,8 @@ static volatile int32_t *knob_param(uint32_t pg, uint32_t k)   /* what KNOB k + 
                           &trk[sel].latch;
     case PG_BANK: return k == 0u ? &trk[sel].bk_mode : k == 1u ? &trk[sel].bk_ring : k == 2u ? &trk[sel].bk_mix : &trk[sel].bk_wind;
     case PG_BANK2: return k == 0u ? &trk[sel].bk_glacier : 0;
+    case PG_DRUM1: return &dm_v[sel][k];
+    case PG_DRUM2: return &dm_v[sel][4u + k];
     case PG_SCALE: return k == 0u ? &sc_root : k == 1u ? &sc_scale : k == 2u ? &sc_tuning : &sc_field;
     case PG_CHORD: return k == 0u ? &trk[sel].ch_type : k == 1u ? &trk[sel].ch_voice : 0;
     case PG_ARP: return k == 0u ? &trk[sel].arp_mode : k == 1u ? &trk[sel].arp_rate : k == 2u ? &trk[sel].arp_oct :
@@ -1144,7 +1157,14 @@ static volatile int32_t *knob_param(uint32_t pg, uint32_t k)   /* what KNOB k + 
     default: return 0;                          /* (not built yet: the knobs do nothing) */
     }
 }
-static const char *knob_name(uint32_t pg, uint32_t k) { return pg == PG_SOUND ? sel_engine()->knob[k] : PAGES[pg].knob[k]; }
+static const char *knob_name(uint32_t pg, uint32_t k)
+{
+    uint32_t md = (uint32_t)clamp(trk[sel].p[ENG_DRUM][0], 0, NDMODEL - 1);
+    if (sel_eng() == ENG_DRUM && pg == PG_SOUND && k) return DM_LAB[md][k - 1u];
+    if (pg == PG_DRUM1) return DM_LAB[md][3u + k];
+    if (pg == PG_DRUM2 && k == 0u) return DM_LAB[md][7];
+    return pg == PG_SOUND ? sel_engine()->knob[k] : PAGES[pg].knob[k];
+}
 static int32_t knob_max(uint32_t pg, uint32_t k)
 {
     static const int32_t GRID_MAX[4] = {127, 100, 4, SEQ_N}, PATT_MAX[4] = {SEQ_N, 7, 127, SEQ_NMODE - 1};
@@ -1156,6 +1176,7 @@ static int32_t knob_max(uint32_t pg, uint32_t k)
            pg == PG_LFO ? (k == 0u ? 127 : k == 1u ? 100 : k == 2u ? NLFODEST - 1 : NLFOSHAPE - 1) :
            pg == PG_DRONE ? (k < 2u ? 100 : k == 2u ? DR_NRISE - 1 : 1) :
            pg == PG_BANK ? (k == 0u ? NBKMODE - 1 : 127) : pg == PG_BANK2 ? 127 :
+           pg == PG_DRUM1 ? 127 : pg == PG_DRUM2 ? (k == 1u ? 1 : 127) :
            pg == PG_SONG ? (k == 0u ? SONG_N - 1 : k == 1u ? SONG_END : k == 2u ? 16 : NSONGMODE - 1) :
            pg == PG_SYSTEM ? (k == 0u ? 3 : k == 1u ? MCH_MAX : k == 2u ? 50 : 4) : pg == PG_SYS2 ? (k == 3u ? CK_N - 1 : k ? 1 : 2) :
            pg == PG_SYS3 ? 1 :
@@ -1250,6 +1271,13 @@ static void knob_text(uint32_t pg, uint32_t k, char *s)   /* knob k's value on p
         else if (k == 1u) put_s(put_u(s, (uint32_t)clamp(v, 0, 100)), " %");
         else if (k == 2u) put_s(s, lfo_dest_name(v));
         else put_s(s, LFO_SHAPE_NAME[clamp(v, 0, NLFOSHAPE - 1)]);
+        return;
+    case PG_DRUM1:
+        put_u(s, (uint32_t)clamp(v, 0, 127));
+        return;
+    case PG_DRUM2:
+        if (k == 1u) put_s(s, v ? "ON" : "OFF");
+        else put_u(s, (uint32_t)clamp(v, 0, 127));
         return;
     case PG_BANK:
         if (k == 0u) put_s(s, BK_NAME[clamp(v, 0, NBKMODE - 1)]);
@@ -1498,12 +1526,14 @@ static void presets_turn(int32_t d)
 }
 #include "ui.c"                                 /* the screens (after the concept designs) */
 
+static void set_latch(int32_t on);
 static void set_source(int32_t e)               /* the selected track's source: its notes go over (a fade, then a new
                                                  * attack); each source keeps its own settings */
 {
     e = clamp(e, 0, NENG - 1);
     if (e == trk[sel].eng)
         return;
+    if (e == ENG_DRUM) set_latch(0);            /* (a hit, not a held note) */
     trk[sel].eng = e;
     nq_put(NQ_RESTART, sel, 0);
 }
@@ -1556,6 +1586,7 @@ static void knob_step(uint32_t pg, uint32_t k, int32_t d)   /* KNOB k + 1 on pag
     else if (pg == PG_GRID && k == 0u && sc_now() > 0) *p = sc_walk(*p, d);   /* (a SCALE: its notes only) */
     else if (pg == PG_GRID && k == 0u && !*p && d > 0) *p = 60;   /* NOTE from OFF: C4, then on from there */
     else *p = clamp(*p + d, lo, hi);
+    if (pg == PG_SOUND && k == 0u && sel_eng() == ENG_DRUM && *p != old) dm_def(sel, (uint32_t)*p);   /* (a new MODEL: its sound) */
     if (pg == PG_BANK && k == 0u && *p && !trk[sel].bk_ring && !trk[sel].bk_mix)   /* (first on: it sounds at once) */
         trk[sel].bk_ring = 70, trk[sel].bk_mix = 90;
     if (pg == PG_GRID) grid_put();              /* (the step: its bytes) */
@@ -1630,6 +1661,7 @@ static void cc_apply(const uint8_t *L, uint32_t val)   /* a linked CC: its param
         int32_t mx = ENGINES[x % NENG]->max[k];
         v = ((int32_t)val * mx + 63) / 127;
         if (x % NENG == ENG_FM && k == 0u && v != trk[L[3] & 3u].p[ENG_FM][0]) fm_builtin(L[3] & 3u, v);   /* (PATCH) */
+        if (x % NENG == ENG_DRUM && k == 0u && v != trk[L[3] & 3u].p[ENG_DRUM][0]) dm_def(L[3] & 3u, (uint32_t)v);   /* (a new MODEL) */
         trk[L[3] & 3u].p[x % NENG][k] = v;
         return;
     }
@@ -2262,7 +2294,8 @@ static void app_main(void)
             hd_say(SMP_FACT_N ? rc ? "RESTORE FAILED" : "SAMPLES RESTORED" : rc ? "CLEAR FAILED" : "SAMPLES CLEARED");
         }
         sys_sync();
-        if ((page == PG_FMALGO || page == PG_FMOP) && sel_eng() != ENG_FM) page = PG_SOUND;   /* (not FM now: SOUND) */
+        if ((page == PG_FMALGO || page == PG_FMOP) && sel_eng() != ENG_FM) page = PG_SOUND;
+        if ((page == PG_DRUM1 || page == PG_DRUM2) && sel_eng() != ENG_DRUM) page = PG_SOUND;   /* (not FM now: SOUND) */
 
         while (midi_get(&st, &d1, &d2)) {       /* MIDI in (USB, the TRS jack): a note on MIDI CHANNEL's T1 .. T4
                                                  * channels plays that track as its keys (ALL > SEL: any channel, the

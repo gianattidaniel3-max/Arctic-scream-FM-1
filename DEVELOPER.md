@@ -40,6 +40,14 @@ and release it. For building from scratch see [docs/BUILDING.md](docs/BUILDING.m
 - A TUNING's own scales are `SC_NATIVE` (`scale.c`); FIELD is in `note_on` (`grimm.c`). The saved byte after TUNING's holds both.
 - `tests/tuning_test.py` measures the pitches in the audio.
 
+### BANK
+
+- `firmware/src/bank.c`, run per track in `mix_tracks` (`grimm.c`) before the filter and sends. With MODE OFF nothing runs,
+  and the audio is the same to the sample. A ring or WIND keeps a silent track sounding.
+- Chamberlin state-variable filters in Q30 with 64-bit products, because `tsvf` in Q12 is too coarse for low, exact pitches.
+- Saved with the project only (version 9, five bytes a track in the block after MASTER and DRIVE), not in sounds or slots.
+- `tests/bank_test.py` measures the bands' pitches in the audio. Its CPU cost on the FM-1 shows under MIX in `tools/fm1_cpu.py`.
+
 ### Flash chips
 
 `fl_known` (`fm1_flash.h`) accepts the first units' 0x856014 and the newer units' UC25HQ80, 0xB36014, in the app, the

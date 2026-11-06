@@ -111,7 +111,7 @@ static char *ui_3(char *s, uint32_t v) { s[0] = (char)('0' + v / 100u % 10u), s[
 static uint32_t ui_pc(int32_t v) { return ((uint32_t)clamp(v, 0, 127) * 100u + 63u) / 127u; }
 
 /* a source's short name (the HOME slabs: "T2 FM") */
-static const char *const SRC_CODE[NENG] = {"VA", "FM", "SA", "VO", "WH", "PH", "PD", "HW"};
+static const char *const SRC_CODE[NENG] = {"VA", "FM", "SA", "VO", "WH", "PH", "PD", "HW", "DR"};
 
 /* ---- the header */
 static char ui_hb[12], ui_hl[24], ui_hr[12];    /* the button, the left, the right */
@@ -391,6 +391,13 @@ static void ui_slab_make(uint32_t k, slab_t *S)
         else if (k == 2u) ui_label(S->val, lfo_dest_name(v));
         else put_s(S->val, LFO_SHAPE_SHORT[clamp(v, 0, NLFOSHAPE - 1)]);
         return;
+    case PG_DRUM1:
+        ui_3(S->val, (uint32_t)clamp(v, 0, 127));
+        return;
+    case PG_DRUM2:
+        if (k == 1u) put_s(S->val, v ? "ON" : "OFF");
+        else ui_3(S->val, (uint32_t)clamp(v, 0, 127));
+        return;
     case PG_BANK:
         if (k == 0u) put_s(S->val, BK_NAME[clamp(v, 0, NBKMODE - 1)]);
         else ui_3(S->val, ((uint32_t)clamp(v, 0, 127) * 100u + 63u) / 127u);
@@ -528,6 +535,7 @@ static void ui_tint(uint32_t pg)
     case PG_LFO: a = BW_PINK, b = BW_CYAN, c = BW_AMBER, x = UI_W; break;
     case PG_DRONE: a = BW_CYAN, b = BW_VIOLET, c = BW_TEAL, x = BW_MAGENTA; break;
     case PG_BANK: case PG_BANK2: a = BW_AMBER, b = BW_CYAN, c = BW_VIOLET, x = BW_TEAL; break;
+    case PG_DRUM1: case PG_DRUM2: a = BW_CYAN, b = BW_MAGENTA, c = BW_AMBER, x = BW_TEAL; break;
     case PG_SOUND: case PG_SOURCE: case PG_FMALGO: case PG_FMOP: a = BW_PERIWINKLE, b = BW_TEAL, c = BW_PINK, x = BW_AMBER; break;
     case PG_GRID: case PG_PATTERN: a = BW_VIOLET, b = BW_CYAN, c = BW_PINK, x = BW_MAGENTA; break;
     case PG_SCALE: case PG_CHORD: a = BW_LAVENDER, b = BW_CYAN, c = BW_TEAL, x = BW_AMBER; break;
@@ -1243,7 +1251,7 @@ static void pic_env(void)                       /* Env: the shape of the track's
 
 static int ui_anim_page(uint32_t p)             /* the pages whose ribbons move (ui_update) */
 {
-    return p == PG_DRONE || p == PG_BANK || p == PG_BANK2 || p == PG_ENV || p == PG_TAPE || p == PG_GRAIN || p == PG_DELAY || p == PG_SPACE || p == PG_LFO ||
+    return p == PG_DRONE || p == PG_DRUM1 || p == PG_DRUM2 || p == PG_BANK || p == PG_BANK2 || p == PG_ENV || p == PG_TAPE || p == PG_GRAIN || p == PG_DELAY || p == PG_SPACE || p == PG_LFO ||
            p == PG_MIX1 || p == PG_MIX2 || p == PG_MASTER || p == PG_DRIVE || p == PG_SOUND || p == PG_FMOP || p == PG_FMALGO || p == PG_SCALE ||
            p == PG_CHORD || p == PG_PERFORM || p == PG_ARP;
 }
@@ -1574,6 +1582,29 @@ static void ui_keys(int32_t p0, int32_t edo)    /* the twelve normal notes as a 
         if (x1 >= x0) ui_rect(x0, 44, x1 - x0 + 1 - (edo >= 10 ? 1 : 0), 12, c);
         if (BLK[pc] && x1 >= x0 && edo >= 10) ui_rect(x0, 44, x1 - x0, 1, UI_M0);
     }
+}
+static void pic_drum(void)                      /* DRUM: a hit, as ribbons falling away: as high as it sounds now, as long
+                                                 * as its DECAY; below, its keys and chance */
+{
+    const volatile int32_t *p = trk[sel].p[ENG_DRUM];
+    uint32_t md = (uint32_t)clamp(p[0], 0, NDMODEL - 1), lv = dm[sel].pk, i, j;
+    int32_t y[55], dk = clamp(p[2], 0, 127), amp = 3, l = (int32_t)(lv >> 6);
+    char t[32], *e;
+    while (l > 0 && amp < 46) l >>= 1, amp += 6;
+    ui_caption(DM_NAME[md], dm_v[sel][5] ? "KEYS ON" : "KEYS OFF");
+    for (j = 0; j < 3u; j++) {
+        uint32_t f = md == DM_MEMB ? 3u + j * 2u : 11u + j * 5u;   /* (a membrane's slow rings; hail's fast ones) */
+        for (i = 0; i < 55u; i++) {
+            int32_t env = 64 - (int32_t)i * 64 * 40 / ((dk + 8) * 54);
+            env = env < 0 ? 0 : env;
+            y[i] = 72 + (int32_t)j * 8 + hw_wave((i * f + hw_ph * (j + 1u) + j * 60u) & 255u) * amp * env / (64 * 64);
+        }
+        ui_glow(PX0, 4, y, 55, j == 0u ? ui_acc : ui_mix(UI_K, UI_KC[j], 2, 3));
+    }
+    e = put_s(t, "WANDER ");
+    e = put_s(put_u(e, (uint32_t)clamp(dm_v[sel][6], 0, 127)), "  HUMAN ");
+    put_u(e, (uint32_t)clamp(dm_v[sel][7], 0, 127));
+    ui_text(12, 130, t, 1, UI_M);
 }
 static void pic_bank(void)                      /* BANK: the keyboard of SCALE, and a line at each band's pitch, as long as
                                                  * it rings; the bands' notes */
@@ -2031,6 +2062,7 @@ static void ui_pic_draw(void)
         case ENG_WHEEL: pic_wheel(); return;
         case ENG_PHYS: pic_phys(); return;
         case ENG_HOWL: pic_howl(); return;
+        case ENG_DRUM: pic_drum(); return;
         default: pic_phase(); return;
         }
     case PG_SOURCE: pic_source(); return;
@@ -2049,6 +2081,7 @@ static void ui_pic_draw(void)
     case PG_LFO: pic_lfo(); return;
     case PG_DRONE: pic_drone(); return;
     case PG_BANK: case PG_BANK2: pic_bank(); return;
+    case PG_DRUM1: case PG_DRUM2: pic_drum(); return;
     case PG_SONG: pic_song(); return;
     case PG_PERFORM: pic_perform(); return;
     case PG_SOUNDS: pic_sounds(); return;
@@ -2256,7 +2289,7 @@ static void ui_update(int32_t oct)
         an_t = fm1_ms;
         ui_home_frame(!all);
     }
-    if (((page == PG_SOUND && sel_eng() == ENG_HOWL) || ui_anim_page(page)) && fm1_ms - an_t >= UI_ANIM_MS) {   /* EditHOWL,
+    if (((page == PG_SOUND && (sel_eng() == ENG_HOWL || sel_eng() == ENG_DRUM)) || ui_anim_page(page)) && fm1_ms - an_t >= UI_ANIM_MS) {   /* EditHOWL,
                                                  * the aurora pages: their ribbons move */
         an_t = fm1_ms;
         hw_ph++;

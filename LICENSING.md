@@ -9,6 +9,11 @@ complete source under the same licence too.
 GR!MM is a modified version of [Dinghy](https://github.com/zvenson/dinghy) (zvenson), which is based on Felucca and
 SLOOP. Everything below that is not marked as a GR!MM change is theirs.
 
+
+## FNTSMG-1
+
+The DRUM source's models (`firmware/src/fg/`) are from [FNTSMG-1](https://github.com/fantasmogenesis/fntsmg-1) by fantasmogenesis, GPL-3.0.
+
 ## Who made what
 
 | | |

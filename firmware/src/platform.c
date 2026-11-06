@@ -78,7 +78,7 @@ static void rt_out(uint32_t st, uint32_t due)   /* audio ISR: a realtime byte ou
 #define APP_NAME "DINGHY"
 #endif
 #ifndef FELUCCA_ID
-#define FELUCCA_ID "FM-1_977"                   /* package identity: Arctic Scream 1.x (tools/build.py; GR!MM's is 966) */
+#define FELUCCA_ID "FM-1_978"                   /* package identity: Arctic Scream 1.x (tools/build.py; GR!MM's is 966) */
 #endif
 #ifndef APP_VER
 #define APP_VER "0.0"
