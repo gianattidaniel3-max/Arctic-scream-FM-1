@@ -12,7 +12,9 @@ SLOOP. Everything below that is not marked as a GR!MM change is theirs.
 
 ## FNTSMG-1
 
-The DRUM source's models (`firmware/src/fg/`) are from [FNTSMG-1](https://github.com/fantasmogenesis/fntsmg-1) by fantasmogenesis, GPL-3.0.
+The DRUM source's models (`firmware/src/fg/`) are from [FNTSMG-1](https://github.com/fantasmogenesis/fntsmg-1) by fantasmogenesis, GPL-3.0:
+MEMBRANA and BARRIDO (`fg_kick.c`), GRANIZO (`fg_metal.c`), CAJA and APLAUSO (`fg_snare.c`), and their factory presets
+(`fg_presets.h`), the presets' names in English.
 
 ## Who made what
 

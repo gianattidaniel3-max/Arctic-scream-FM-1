@@ -1159,7 +1159,7 @@ static volatile int32_t *knob_param(uint32_t pg, uint32_t k)   /* what KNOB k + 
 }
 static const char *knob_name(uint32_t pg, uint32_t k)
 {
-    uint32_t md = (uint32_t)clamp(trk[sel].p[ENG_DRUM][0], 0, NDMODEL - 1);
+    uint32_t md = dm_model(sel);
     if (sel_eng() == ENG_DRUM && pg == PG_SOUND && k) return DM_LAB[md][k - 1u];
     if (pg == PG_DRUM1) return DM_LAB[md][3u + k];
     if (pg == PG_DRUM2 && k == 0u) return DM_LAB[md][7];

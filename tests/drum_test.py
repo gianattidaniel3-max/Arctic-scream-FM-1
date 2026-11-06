@@ -36,7 +36,10 @@ def rms(x):
     return float(np.sqrt((x ** 2).mean()))
 
 
-def src(model=0, edo=12):
+MEMB, HAIL = 63, 84                                  # MODEL: KICK, SNARE, CLAP, MEMBRANE, HAIL, each 21 (its presets)
+
+
+def src(model=MEMB, edo=12):
     ev = [(100, f"btn {EDIT}"), (140, f"btn {EDIT}"), (180, f"enc {K1} 8")]     # SOURCE: DRUM (SOUND after it)
     ev += [(220, f"btn {SEL}"), (240, f"enc 4 {EDOS.index(edo) - 3}"), (280, f"btn {EDIT}")]
     if model: ev.append((320, f"enc {K1} {model}"))
@@ -61,7 +64,7 @@ check(np.abs(audio("hit")).max() < 32767, f"MEMBRANE: no clipping (peak {np.abs(
 check(rms(c) < 5, f"MEMBRANE: it dies away (rms {rms(c):.0f})")
 run("hitv", src() + hit(48, off=5), 1500)
 check(rms(audio("hitv", 0.65, 1.0)) > 0.8 * rms(audio("hit", 0.65, 1.0)), "a note let go at once: the tail is its own")
-run("hail", src(1) + hit(60), 2000)
+run("hail", src(HAIL) + hit(60), 2000)
 h = audio("hail", 0.6, 0.8)
 check(rms(h) > 300 and np.abs(audio("hail")).max() < 32767, f"HAIL: a hit, no clipping (rms {rms(h):.0f})")
 
@@ -71,7 +74,7 @@ PURE = [(440, f"btn {EDIT}"), (460, f"btn {EDIT}"), (480, f"enc {K1} -60"), (500
 
 def pitch(n, edo=12):
     name = f"k{edo}{n}"
-    run(name, src(0, edo) + PURE + hit(n), 1800)
+    run(name, src(MEMB, edo) + PURE + hit(n), 1800)
     return f0(audio(name, 0.62, 0.75))
 
 
@@ -101,7 +104,7 @@ ps = [f0(x[int(t * 44100):int((t + 0.7) * 44100)]) for t in (0.7, 1.6, 2.5)]
 check(len(set(round(p, 1) for p in ps)) > 1, f"WANDER: hits differ in pitch ({', '.join(f'{p:.1f}' for p in ps)})")
 
 # through BANK: HAIL is noise; a held C4 gives it a pitch
-ev = src(1) + [(420, f"btn {LFO}"), (440, f"btn {LFO}"), (460, f"btn {LFO}"), (480, f"enc {K1} 1"), (500, f"enc {K2} 57"), (520, f"enc {K3} 37")]
+ev = src(HAIL) + [(420, f"btn {LFO}"), (440, f"btn {LFO}"), (460, f"btn {LFO}"), (480, f"enc {K1} 1"), (500, f"enc {K2} 57"), (520, f"enc {K3} 37")]
 run("bank", ev + hit(60, 700, 400), 2000)
 S = np.abs(np.fft.rfft(audio("bank", 0.7, 1.4), 1 << 18)); fr = np.fft.rfftfreq(1 << 18, 1 / 44100)
 pk = fr[np.argmax(S * (fr > 100) * (fr < 3000))]
@@ -109,13 +112,37 @@ check(abs(1200 * np.log2(pk / (440 * 2 ** ((60 - 69) / 12)))) % 1200 < 15 or abs
 
 # saved
 sv = OUT / "save.bin"
-run("save", src(1) + [(440, f"btn {EDIT}"), (460, f"btn {EDIT}"), (500, f"enc {K2} 11")], 5000, {**os.environ, "GRIMM_SAVE_OUT": str(sv)})
+run("save", src(HAIL) + [(440, f"btn {EDIT}"), (460, f"btn {EDIT}"), (500, f"enc {K2} 11")], 5000, {**os.environ, "GRIMM_SAVE_OUT": str(sv)})
 p = run("load", [(400, "probe")], 500, {**os.environ, "GRIMM_SAVE_IN": str(sv)})
 m = re.search(r" drum ([\d,]+)", p)
-check(m and m.group(1).startswith("8,1,") and m.group(1).split(",")[6] == "11", f"saved, power on: {m and m.group(1)}")
+check(m and m.group(1).startswith(f"8,{HAIL},") and m.group(1).split(",")[6] == "11", f"saved, power on: {m and m.group(1)}")
 p = run("old", [(400, "probe")], 500, {**os.environ, "GRIMM_SAVE_IN": "tests/data/a1.2-saves.bin"})
 m = re.search(r" drum ([\d,]+)", p)
 check(m and m.group(1).split(",")[1] == "0", f"a project from before it loads: {m and m.group(1)}")
+
+# KICK, SNARE, CLAP and the presets: each sounds, none clips, each dies away; about as loud as MEMBRANE
+def loud(x):
+    return max(rms(x[i:i + 882]) for i in range(0, len(x) - 882, 441))
+ref = loud(audio("hit", 0.6, 1.0))
+for nm, e in (("KICK", 0), ("SNARE", 21), ("CLAP", 42), ("KICK 909", 1), ("SNARE RIMSHOT", 34), ("CLAP CROWD", 49), ("MEMBRANE CONGA", 68), ("HAIL OPEN HAT", 86)):
+    run(f"m{e}", src(e) + hit(48), 6000)
+    x = audio(f"m{e}", 0.6, 1.0)
+    db = 20 * np.log10(loud(x) / ref)                                 # (its loudest 20 ms: a hat is short, a crowd slow)
+    check(rms(audio(f"m{e}", 0.3, 0.59)) == 0 and rms(x) > 200 and np.abs(audio(f"m{e}")).max() < 32767 and rms(audio(f"m{e}", 5.5, 6.0)) < 5,
+          f"{nm}: a hit, no clipping, it dies away ({db:+.1f} dB to MEMBRANE)")
+    check(-14 < db < 8, f"{nm}: level with the others ({db:+.1f} dB)")
+run("kk", src(0) + hit(48), 1500); run("kk2", src(0) + hit(60), 1500)
+ka, kb = f0(audio("kk", 0.75, 1.0), 20, 200), f0(audio("kk2", 0.75, 1.0), 20, 200)
+check(abs(1200 * np.log2(kb / ka) - 1200) < 40, f"KICK: KEYS, an octave up ({ka:.1f}, {kb:.1f} Hz)")
+p = run("pr", src(0) + [(900, f"enc {K1} 4"), (950, "probe")], 1000)   # (slowly: a step a detent)
+m = re.search(r" drum ([\d,]+)", p)
+check(m and m.group(1).split(",")[1] == "4" and m.group(1).split(",")[2:5] == ["66", "30", "109"], f"MODEL to KICK HARD: its sound ({m and m.group(1)})")
+run("sn", src(21) + hit(48) + hit(48, 1400), 2500)
+check(rms(audio("sn", 1.4, 1.8)) > 200, "SNARE: a second hit")
+if len(sys.argv) > 2:                               # a save from 1.4.0 (its HAIL: 1): HAIL
+    p = run("v140", [(400, "probe")], 500, {**os.environ, "GRIMM_SAVE_IN": sys.argv[2]})
+    m = re.search(r" drum ([\d,]+)", p)
+    check(m and m.group(1).split(",")[1] == str(HAIL), f"1.4.0's save: HAIL as it was ({m and m.group(1)})")
 
 print("drum test: " + ("FAILED" if bad else "passed"))
 sys.exit(1 if bad else 0)

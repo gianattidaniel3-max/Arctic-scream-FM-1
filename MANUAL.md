@@ -232,10 +232,12 @@ North Sami names.
   (harmonics 1, 2, 3, 5 of the lowest note), GHOST (CHORD a quarter tone up: at 24 EDO, the other field). **RING:** how
   narrow and how long. **MIX:** dry to bank alone. **WIND:** noise into the bank, so the track sings its pitches over
   silence. When you let go, the bank stays on its last pitches. **BANK 2 > GLACIER:** a new pitch glides there, up to ~8 s.
-- **DRUM** (a source, EDIT > SOURCE): one drum on the track, from FNTSMG-1 by fantasmogenesis. **MODEL:** MEMBRANE, HAIL.
+- **DRUM** (a source, EDIT > SOURCE): one drum on the track, from FNTSMG-1 by fantasmogenesis. **MODEL:** KICK, SNARE, CLAP, MEMBRANE (toms,
+  hand drums), HAIL (hats, shakers), each followed by its twenty FNTSMG-1 presets (KICK 909, SNARE RIMSHOT, HAIL OPEN HAT…):
+  turn slowly for one at a time; the screen shows the model and the preset.
   SOUND has its three main knobs, **DRUM 1** and **DRUM 2** the rest, and **KEYS** (the keys tune it, at the TUNING's
-  pitches), **WANDER** (each hit's pitch off at random), **HUMAN** (each hit's level off at random). A new MODEL starts from
-  its own sound. Saved with the project; a saved sound keeps MODEL and the three main knobs only.
+  pitches), **WANDER** (each hit's pitch off at random), **HUMAN** (each hit's level off at random). A new MODEL or preset
+  sets its sound; KEYS, WANDER and HUMAN stay as they are. Saved with the project; a saved sound keeps MODEL and the three main knobs only.
 - **CHORD TYPE:** SCALE (the scale's triad), MIN, MAJ, SUS2, SUS4, FIFTH, MIN7, MAJ7, DIM, ADD9, CLUSTER, SCALE7 (the
   scale's four notes, 1-3-5-7), QUART3 and QUART4 (stacked fourths), QUINT (stacked fifths), HARM (harmonics 4:5:6:7, at
   each tuning's nearest steps).

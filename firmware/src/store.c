@@ -576,6 +576,7 @@ static void pk_work(uint8_t *q)
     }
     for (t = 0; t < NT; t++, q += 12) {         /* DRUM: SOUND's four, DRUM 1 and 2's eight */
         for (k = 0; k < 4u; k++) q[k] = (uint8_t)clamp(trk[t].p[ENG_DRUM][k], 0, 127);
+        q[0] = (uint8_t)(0x80u | (uint32_t)clamp(trk[t].p[ENG_DRUM][0], 0, NDENT - 1));   /* (MODEL's entry; 1.4.0's: 0 MEMBRANE, 1 HAIL) */
         for (k = 0; k < DM_DEEP; k++) q[4u + k] = (uint8_t)clamp(dm_v[t][k], 0, 127);
     }
 }
@@ -612,8 +613,8 @@ static void uk_work(const uint8_t *q, uint32_t f, const uint16_t *vs)   /* (f: U
         }
         for (t = 0; t < NT; t++) {              /* (DRUM; saved before it: as it comes) */
             const uint8_t *y = fx >= 76u ? x + 28u + t * 12u : 0;
-            trk[t].p[ENG_DRUM][0] = y ? clamp(y[0], 0, NDMODEL - 1) : 0;
-            dm_def(t, (uint32_t)trk[t].p[ENG_DRUM][0]);
+            trk[t].p[ENG_DRUM][0] = !y ? 0 : y[0] & 0x80u ? clamp(y[0] & 0x7f, 0, NDENT - 1) : (int32_t)((y[0] ? DM_HAIL : DM_MEMB) * DM_NPR);
+            dm_init(t), dm_def(t, (uint32_t)trk[t].p[ENG_DRUM][0]);
             if (y) {
                 for (k = 1; k < 4u; k++) trk[t].p[ENG_DRUM][k] = clamp(y[k], 0, 127);
                 for (k = 0; k < DM_DEEP; k++) dm_v[t][k] = clamp(y[4u + k], 0, 127);
@@ -866,7 +867,7 @@ static void project_new(void)                   /* NEW: the four tracks' power-o
     for (t = 0; t < NT; t++) {
         for (e = 0; e < NENG; e++)
             for (k = 0; k < 4u; k++) trk[t].p[e][k] = T0.p[e][k];
-        dm_def(t, 0);
+        dm_init(t);
         for (k = 0; k < 4u; k++) trk[t].env[k] = T0.env[k];
         if (trk[t].latch) nq_put(NQ_RELEASE, t, 0);
         trk[t].latch = T0.latch;

@@ -340,6 +340,7 @@ static void ui_slab_make(uint32_t k, slab_t *S)
         if (eng == ENG_PHYS && k == 3u) put_s(S->lab, md == PM_MEMB ? "BEND" : md == PM_SYMP ? "BUZZ" : "BOW");
         if (eng == ENG_SAMPLE && k == 0u) { put_u(S->val, (uint32_t)v + 1u); return; }   /* (the name: the caption) */
         if (eng == ENG_VA && k == 0u) { put_s(S->val, v == WAVE_SUPER ? "SUPER" : v == WAVE_SQR ? "SQR" : "SAW"); return; }
+        if (eng == ENG_DRUM && k == 0u) { ui_squeeze(S->val, DM_ENAME[clamp(v, 0, NDENT - 1)]); return; }   /* (in full: the caption) */
         if (eng == ENG_PHYS && k == 0u) { put_s(S->val, md == PM_MEMB ? "MEMB" : md == PM_SYMP ? "SYMP" : N_PHYS_MODEL[md]); return; }
         if (mx <= 24 || (eng == ENG_SAMPLE && k == 2u) || (eng == ENG_VOICE && k == 0u) ||
             (eng == ENG_PHYS && k == 1u && md == PM_SYMP)) {   /* (the source's own words) */
@@ -1587,13 +1588,15 @@ static void pic_drum(void)                      /* DRUM: a hit, as ribbons falli
                                                  * as its DECAY; below, its keys and chance */
 {
     const volatile int32_t *p = trk[sel].p[ENG_DRUM];
-    uint32_t md = (uint32_t)clamp(p[0], 0, NDMODEL - 1), lv = dm[sel].pk, i, j;
+    uint32_t md = dm_model(sel), en = (uint32_t)clamp(p[0], 0, NDENT - 1), lv = dm[sel].pk, i, j;
     int32_t y[55], dk = clamp(p[2], 0, 127), amp = 3, l = (int32_t)(lv >> 6);
     char t[32], *e;
     while (l > 0 && amp < 46) l >>= 1, amp += 6;
-    ui_caption(DM_NAME[md], dm_v[sel][5] ? "KEYS ON" : "KEYS OFF");
+    e = put_s(t, DM_NAME[md]);                  /* ("SNARE INDUSTRIAL"; a model as it comes: its name) */
+    if (en % DM_NPR) put_s(put_s(e, " "), DM_ENAME[en]);
+    ui_caption(t, dm_v[sel][5] ? "KEYS ON" : "KEYS OFF");
     for (j = 0; j < 3u; j++) {
-        uint32_t f = md == DM_MEMB ? 3u + j * 2u : 11u + j * 5u;   /* (a membrane's slow rings; hail's fast ones) */
+        uint32_t f = md == DM_HAIL || md == DM_CLAP ? 11u + j * 5u : 3u + j * 2u;   /* (the skins' slow rings; hail's and a clap's fast ones) */
         for (i = 0; i < 55u; i++) {
             int32_t env = 64 - (int32_t)i * 64 * 40 / ((dk + 8) * 54);
             env = env < 0 ? 0 : env;
