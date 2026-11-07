@@ -111,7 +111,7 @@ static char *ui_3(char *s, uint32_t v) { s[0] = (char)('0' + v / 100u % 10u), s[
 static uint32_t ui_pc(int32_t v) { return ((uint32_t)clamp(v, 0, 127) * 100u + 63u) / 127u; }
 
 /* a source's short name (the HOME slabs: "T2 FM") */
-static const char *const SRC_CODE[NENG] = {"VA", "FM", "SA", "VO", "WH", "PH", "PD", "HW", "DR"};
+static const char *const SRC_CODE[NENG] = {"VA", "FM", "SA", "VO", "WH", "PH", "PD", "HW", "KK", "SN", "CP", "TM", "HH"};
 
 /* ---- the header */
 static char ui_hb[12], ui_hl[24], ui_hr[12];    /* the button, the left, the right */
@@ -166,7 +166,7 @@ static void ui_head_text(void)
         if (fm1_ms >= hd_until && !learn_st && !as_err && !save_held && !(sv_wait && fm1_ms - sv_said < SV_SAY_MS)) {
             if (page == PG_SOUNDS || P->btn == BTN_SEL) put_u(put_s(q, " T"), sel + 1u);
             else if (page == PG_PROJECTS) q = put_s(q, " "), q[0] = (char)('A' + (slot_cur & 3)), q[1] = 0;
-            else if (page == PG_GRID) put_s(put_u(put_s(q, " "), (uint32_t)seq_steps(&seq[sel])), "ST");
+            else if (page == PG_GRID) put_s(put_s(put_u(put_s(q, " "), (uint32_t)seq_steps(&seq[sel])), "ST"), kb_steps ? " KEYS:STEPS" : "");
             else if (page == PG_ARP && trk[sel].latch) put_s(q, " LATCH");
             else if (page == PG_FMALGO || page == PG_FMOP) put_u(put_s(q, " OP"), (uint32_t)clamp(fm_op, 0, 5) + 1u);
         }
@@ -291,10 +291,13 @@ static void lock_slab(uint32_t k, slab_t *S)    /* SEL held on SEQ's pages: the 
     const engine_t *E = sel_engine();
     int32_t pv[4], j, mx = E->max[k];
     char t[32];
-    for (j = 0; j < 4; j++) pv[j] = st->lmask >> j & 1u ? st->lv[j] : trk[sel].p[sel_eng()][j];
+    int32_t li[4];
+    (void)st;
+    for (j = 0; j < 4; j++) li[j] = lk_find(sel, (uint32_t)clamp(seq[sel].cursor, 0, SEQ_N - 1), (uint32_t)j),
+                            pv[j] = li[j] >= 0 ? lk_e[sel][li[j]].v : trk[sel].p[sel_eng()][j];
     ui_label(S->lab, E->knob[k]);
     S->fill = (uint8_t)((clamp(pv[k], 0, mx) * 8 + mx / 2) / (mx ? mx : 1));
-    S->acc = (uint8_t)(st->lmask >> k & 1u);
+    S->acc = (uint8_t)(li[k] >= 0);
     if (mx <= 24) { E->text(pv, k, t); ui_squeeze(S->val, t); }
     else ui_3(S->val, ui_pc(pv[k]));
 }
@@ -309,11 +312,24 @@ static char *fm_ratio_text(char *s, uint32_t i)   /* operator i's ratio, RATIO (
     *s++ = (char)('0' + r / 10u % 10u), *s++ = (char)('0' + r % 10u), *s = 0;
     return s;
 }
-static void ui_slab_make(uint32_t k, slab_t *S)
+static int32_t lk_show(uint32_t k)              /* KEYS: STEPS, a step's key held: its lock on this page's knob k (-1 none) */
+{
+    int32_t i;
+    if (!kb_steps || st_hold < 0 || page * 4u + k > 255u) return -1;
+    i = lk_find(sel, (uint32_t)st_hold, page * 4u + k);
+    return i >= 0 ? lk_e[sel][i].v : -1;
+}
+static void ui_slab_make0(uint32_t k, slab_t *S);
+static void ui_slab_make(uint32_t k, slab_t *S)   /* (a step's lock shown: its value, in the accent) */
+{
+    ui_slab_make0(k, S);
+    if (lk_show(k) >= 0) S->acc = 1;
+}
+static void ui_slab_make0(uint32_t k, slab_t *S)
 {
     volatile int32_t *p = knob_param(page, k);
     const char *name = knob_name(page, k);
-    int32_t v = p ? *p : 0, mx = knob_max(page, k), md = (int32_t)phys_model(trk[sel].p[ENG_PHYS]);
+    int32_t v = p ? (lk_show(k) >= 0 ? lk_show(k) : *p) : 0, mx = knob_max(page, k), md = (int32_t)phys_model(trk[sel].p[ENG_PHYS]);
     uint32_t eng = sel_eng();
     char t[32];
     S->acc = S->dim = 0;
@@ -338,7 +354,7 @@ static void ui_slab_make(uint32_t k, slab_t *S)
         if (eng == ENG_PHYS && k == 3u) put_s(S->lab, md == PM_MEMB ? "BEND" : md == PM_SYMP ? "BUZZ" : "BOW");
         if (eng == ENG_SAMPLE && k == 0u) { put_u(S->val, (uint32_t)v + 1u); return; }   /* (the name: the caption) */
         if (eng == ENG_VA && k == 0u) { put_s(S->val, v == WAVE_SUPER ? "SUPER" : v == WAVE_SQR ? "SQR" : "SAW"); return; }
-        if (eng == ENG_DRUM && k == 0u) { ui_squeeze(S->val, DM_ENAME[clamp(v, 0, NDENT - 1)]); return; }   /* (in full: the caption) */
+        if (eng_drum((int32_t)eng) && k == 0u) { ui_squeeze(S->val, DM_ENAME[dm_model(sel) * DM_NPR + (uint32_t)clamp(v, 0, DM_NPR - 1)]); return; }   /* (in full: the caption) */
         if (eng == ENG_PHYS && k == 0u) { put_s(S->val, md == PM_MEMB ? "MEMB" : md == PM_SYMP ? "SYMP" : N_PHYS_MODEL[md]); return; }
         if (mx <= 24 || (eng == ENG_SAMPLE && k == 2u) || (eng == ENG_VOICE && k == 0u) ||
             (eng == ENG_PHYS && k == 1u && md == PM_SYMP)) {   /* (the source's own words) */
@@ -387,8 +403,9 @@ static void ui_slab_make(uint32_t k, slab_t *S)
         } else
             put_s(S->val, SONG_MODE_SHORT[clamp(v, 0, NSONGMODE - 1)]);
         return;
-    case PG_LFO:
-        if (k == 0u) lfo_rate_text(S->val, v, "");
+    case PG_LFO: case PG_LFO2:
+        if (k == 0u && lf_sync[sel][page == PG_LFO2]) put_s(S->val, LS_DIV_NAME[clamp(v, 0, NLSDIV - 1)]);
+        else if (k == 0u) lfo_rate_text(S->val, v, "");
         else if (k == 1u) ui_3(S->val, (uint32_t)clamp(v, 0, 100));
         else if (k == 2u) ui_label(S->val, lfo_dest_name(v));
         else put_s(S->val, LFO_SHAPE_SHORT[clamp(v, 0, NLFOSHAPE - 1)]);
@@ -412,11 +429,20 @@ static void ui_slab_make(uint32_t k, slab_t *S)
         else if (k == 2u) dr_rise_text(S->val, v, "");
         else put_s(S->val, v ? "ON" : "OFF");
         return;
-    case PG_ARP:
+    case PG_ARP:                                /* EUCLID 2: MODE, OCTAVES, GATE */
         if (k == 0u) put_s(S->val, ARP_MODE_SHORT[clamp(v, 0, NARPMODE - 1)]);
-        else if (k == 1u) put_s(S->val, ARP_RATE_NAME[clamp(v, 0, NARPRATE - 1)]);
-        else if (k == 2u) put_u(S->val, (uint32_t)clamp(v, 1, 4));
-        else ui_3(S->val, (uint32_t)clamp(v, 10, 100));
+        else if (k == 1u) put_u(S->val, (uint32_t)clamp(v, 1, 4));
+        else if (k == 2u) ui_3(S->val, (uint32_t)clamp(v, 10, 100));
+        return;
+    case PG_EUC:                                /* EUCLID: HITS, STEPS, ROTATE, RATE */
+        if (k == 3u) put_s(S->val, ARP_RATE_NAME[clamp(v, 0, NARPRATE - 1)]);
+        else put_u(S->val, (uint32_t)clamp(v, 0, 32));
+        return;
+    case PG_LFO1M: case PG_LFO2M:               /* MODE, START, FADE, SYNC */
+        if (k == 0u) put_s(S->val, LFO_MODE_NAME[clamp(v, 0, NLFOMODE - 1)]);
+        else if (k == 1u) put_u(S->val, (uint32_t)clamp(v, 0, 127) * 360u / 127u);
+        else if (k == 2u) { if (v) ui_3(S->val, ui_pc(v)); else put_s(S->val, "OFF"); }
+        else put_s(S->val, v ? "ON" : "OFF");
         return;
     case PG_CHORD: put_s(S->val, k ? VC_NAME[clamp(v, 0, NVOICING - 1)] : CH_SHORT[clamp(v, 0, NCHORD - 1)]); return;
     case PG_PROJECTS:
@@ -433,6 +459,12 @@ static void ui_slab_make(uint32_t k, slab_t *S)
         if (k == 0u) { put_u(S->val, (uint32_t)v); return; }
         break;
     case PG_ENV:
+        if (env_mode[sel] == EM_AHD) {          /* AHD: ATTACK, HOLD, DECAY */
+            if (k == 0u) ui_time(S->val, pow2_q16(v * 20));
+            else if (k == 1u) ui_time(S->val, ahd_hold_ms(v) << 16);
+            else if (k == 2u) ui_time(S->val, 10u * pow2_q16(v * 15));
+            return;
+        }
         if (k == 2u) { ui_3(S->val, ui_pc(v)); return; }
         ui_time(S->val, k == 0u ? pow2_q16(v * 20) : k == 1u ? 10u * pow2_q16(v * 15) : 10u * pow2_q16((v * 33) >> 1));
         return;
@@ -534,7 +566,8 @@ static void ui_tint(uint32_t pg)
     uint16_t a, b, c, x;
     switch (pg) {
     case PG_ENV: a = BW_AMBER, b = BW_TEAL, c = BW_PERIWINKLE, x = BW_MAGENTA; break;
-    case PG_LFO: a = BW_PINK, b = BW_CYAN, c = BW_AMBER, x = UI_W; break;
+    case PG_LFO: case PG_LFO2: case PG_LFO1M: case PG_LFO2M: a = BW_PINK, b = BW_CYAN, c = BW_AMBER, x = UI_W; break;
+    case PG_EUC: a = BW_TEAL, b = BW_PINK, c = BW_AMBER, x = BW_CYAN; break;
     case PG_DRONE: a = BW_CYAN, b = BW_VIOLET, c = BW_TEAL, x = BW_MAGENTA; break;
     case PG_BANK: case PG_BANK2: a = BW_AMBER, b = BW_CYAN, c = BW_VIOLET, x = BW_TEAL; break;
     case PG_DRUM1: case PG_DRUM2: a = BW_CYAN, b = BW_MAGENTA, c = BW_AMBER, x = BW_TEAL; break;
@@ -1200,10 +1233,11 @@ static void pic_drone(void)
 
 static void pic_source(void)                    /* the eight sources, the track's in the accent; LATCH */
 {
-    int32_t i, e = (int32_t)sel_eng();
+    int32_t i, e = (int32_t)sel_eng(), top = clamp(e - 4, 0, (int32_t)NENG - 9);   /* (nine shown, the track's among
+                                                 * them: the list scrolls) */
     ui_caption("SOURCE", 0);
-    for (i = 0; i < (int32_t)NENG; i++) {
-        int32_t y = 42 + i * 13;               /* (nine: above the slabs) */
+    for (i = top; i < (int32_t)NENG && i < top + 9; i++) {
+        int32_t y = 42 + (i - top) * 13;       /* (nine: above the slabs) */
         if (i == e) ui_rect(PX0, y - 3, 108, 12, UI_D);
         ui_text(PX0 + 4, y, i == e ? ">" : " ", 1, ui_acc);
         ui_text(PX0 + 16, y, ENGINES[i]->name, 1, i == e ? ui_acc : UI_M);
@@ -1211,7 +1245,7 @@ static void pic_source(void)                    /* the eight sources, the track'
     {                                           /* PRESET: the sound loaded, its name whole (two lines if need be) */
         char m[24];
         int32_t n;
-        src_pre_name(m, sel_eng() == ENG_DRUM ? trk[sel].p[ENG_DRUM][0] : src_pre[sel]);
+        src_pre_name(m, eng_drum(sel_eng()) ? trk[sel].p[sel_eng()][0] : src_pre[sel]);
         ui_text(124, 44, "PRESET", 1, UI_M);
         n = ui_len(m);
         if (n > 13) {
@@ -1231,8 +1265,11 @@ static void pic_env(void)                       /* Env: the shape of the track's
                                                  * down under it as a curtain, swaying (an aurora page: ui_anim_page) */
 {
     const volatile int32_t *e = trk[sel].env;
-    int32_t wa = 2 + clamp(e[0], 0, 127) * 18 / 127, wd = 2 + clamp(e[1], 0, 127) * 12 / 127;
-    int32_t wr = 2 + clamp(e[3], 0, 127) * 14 / 127, ws = 53 - wa - wd - wr, ys = 28 - clamp(e[2], 0, 127) * 25 / 127;
+    int ahdm = env_mode[sel] == EM_AHD;         /* (AHD: ATTACK, HOLD at the top, DECAY to nothing; no release) */
+    int32_t wa = 2 + clamp(ahdm ? ahd[sel][0] : e[0], 0, 127) * 18 / 127, wd = 2 + clamp(ahdm ? ahd[sel][1] : e[1], 0, 127) * (ahdm ? 18 : 12) / 127;
+    int32_t wr = 2 + clamp(ahdm ? ahd[sel][2] : e[3], 0, 127) * (ahdm ? 24 : 14) / 127, ws = ahdm ? 0 : 53 - wa - wd - wr;
+    int32_t ys = ahdm ? 3 : 28 - clamp(e[2], 0, 127) * 25 / 127;
+    if (ahdm && wa + wd + wr > 54) wr = 54 - wa - wd;
     int32_t x, ev[55], y[55], st[55], i, j;
     for (x = 0; x <= 54; x++) {                 /* the level a column (28: 0, 3: full) */
         if (x <= wa) ev[x] = 28 - 25 * x / wa;
@@ -1240,13 +1277,13 @@ static void pic_env(void)                       /* Env: the shape of the track's
         else if (x <= wa + wd + ws) ev[x] = ys;
         else ev[x] = ys + (28 - ys) * (x - wa - wd - ws) / wr;
         if (ev[x] > 28) ev[x] = 28;
-        st[x] = x < wa ? 0 : x < wa + wd ? 1 : x < wa + wd + ws ? 2 : 3;
+        st[x] = x < wa ? 0 : x < wa + wd ? 1 : x < wa + wd + ws ? 2 : ahdm ? 2 : 3;   /* (AHD: DECAY is KNOB 3) */
         y[x] = 50 + (ev[x] - 3) * 96 / 25 + hw_wave(((uint32_t)x * 11u + hw_ph * 3u) & 255u) / 40;   /* (a shimmer) */
     }
     ui_text(PX0 + (wa / 2) * 4, 31, "A", 1, UI_KC[0]);   /* (each stage in its knob's colour) */
-    ui_text(PX0 + (wa + wd / 2) * 4, 31, "D", 1, UI_KC[1]);
-    ui_text(PX0 + (wa + wd + ws / 2) * 4, 31, "S", 1, UI_KC[2]);
-    ui_text(PX0 + (wa + wd + ws + wr / 2) * 4, 31, "R", 1, UI_KC[3]);
+    ui_text(PX0 + (wa + wd / 2) * 4, 31, ahdm ? "H" : "D", 1, UI_KC[1]);
+    if (!ahdm) ui_text(PX0 + (wa + wd + ws / 2) * 4, 31, "S", 1, UI_KC[2]);
+    ui_text(PX0 + (wa + wd + ws + wr / 2) * 4, 31, ahdm ? "D" : "R", 1, UI_KC[ahdm ? 2 : 3]);
     for (x = 0; x < 54; x++) {                  /* the curtain: a ray a column, from the ribbon down, fading */
         int32_t top = y[x] + 3, len = 146 - top, px = PX0 + x * 4 + 2, py = top, s;
         for (s = 4; s <= len; s += 4) {
@@ -1266,7 +1303,7 @@ static void pic_env(void)                       /* Env: the shape of the track's
 
 static int ui_anim_page(uint32_t p)             /* the pages whose ribbons move (ui_update) */
 {
-    return p == PG_DRONE || p == PG_DRUM1 || p == PG_DRUM2 || p == PG_BANK || p == PG_BANK2 || p == PG_ENV || p == PG_TAPE || p == PG_GRAIN || p == PG_DELAY || p == PG_SPACE || p == PG_LFO ||
+    return p == PG_DRONE || p == PG_DRUM1 || p == PG_DRUM2 || p == PG_BANK || p == PG_BANK2 || p == PG_ENV || p == PG_TAPE || p == PG_GRAIN || p == PG_DELAY || p == PG_SPACE || p == PG_LFO || p == PG_LFO2 || p == PG_LFO1M || p == PG_LFO2M || p == PG_EUC ||
            p == PG_MIX1 || p == PG_MIX2 || p == PG_MASTER || p == PG_DRIVE || p == PG_TDRIVE || p == PG_SOUND || p == PG_FMOP || p == PG_FMALGO || p == PG_SCALE ||
            p == PG_CHORD || p == PG_PERFORM || p == PG_ARP;
 }
@@ -1510,7 +1547,7 @@ static void pic_grid(void)                      /* Seq: the 64 steps of the trac
                 else c = s->chord ? ui_acc : UI_L;          /* NOTE (a chord step: CHORD) */
                 ui_rect(dx + x * 2, dy + y * 2, 2, 2, c);
             }
-        if (s->lmask && s->note && i < n) ui_rect(dx + 11, dy + 4, 2, 2, UI_W);   /* (a step with locks: a mark) */
+        if (i < n && lk_step_n(sel, (uint32_t)i)) ui_rect(dx + 11, dy + 4, 2, 2, UI_W);   /* (a step with locks: a mark) */
         if (i == cur) {                         /* the cursor: a ring */
             ui_rect(dx - 2, dy - 2, 14, 1, UI_W), ui_rect(dx - 2, dy + 11, 14, 1, UI_W);
             ui_rect(dx - 2, dy - 2, 1, 14, UI_W), ui_rect(dx + 11, dy - 2, 1, 14, UI_W);
@@ -1602,7 +1639,7 @@ static void ui_keys(int32_t p0, int32_t edo)    /* the twelve normal notes as a 
 static void pic_drum(void)                      /* DRUM: a hit, as ribbons falling away: as high as it sounds now, as long
                                                  * as its DECAY; below, its keys and chance */
 {
-    const volatile int32_t *p = trk[sel].p[ENG_DRUM];
+    const volatile int32_t *p = trk[sel].p[eng_drum(sel_eng()) ? sel_eng() : ENG_KICK];
     uint32_t md = dm_model(sel), en = (uint32_t)clamp(p[0], 0, NDENT - 1), lv = dm[sel].pk, i, j;
     int32_t y[55], dk = clamp(p[2], 0, 127), amp = 3, l = (int32_t)(lv >> 6);
     char t[32], *e;
@@ -1724,6 +1761,21 @@ static void pic_sel(void)                       /* Scale: where each key stands.
     ui_rect(edo != 12u ? 150 : 98, 147, 6, 6, UI_W), ui_text(edo != 12u ? 160 : 108, 146, "PLAYED", 1, UI_M);
 }
 
+static void pic_euc(void)                       /* EUCLID: its STEPS round a ring, its HITS lit, the step due in the
+                                                 * accent; the caption: "5 OF 16" and ON / OFF */
+{
+    uint32_t n = (uint32_t)clamp(eu_steps[sel], 1, 32), i, cur = eu_pos[sel] ? eu_pos[sel] - 1u : n - 1u;
+    char l[24];
+    put_s(put_u(put_s(put_u(l, (uint32_t)clamp(eu_hits[sel], 0, (int32_t)n)), " OF "), n), trk[sel].arp ? "  ON" : "  OFF (HOLD ARP)");
+    ui_caption(l, 0);
+    for (i = 0; i < n; i++) {
+        uint32_t ph = (uint32_t)(((uint64_t)i << 32) / n);
+        int32_t x = PX0 + 106 + (sine_i(ph) * 46) / 32767, y = PY0 + 66 - (sine_i(ph + 0x40000000u) * 46) / 32767;
+        int h = eu_hit(sel, i);
+        uint16_t c = trk[sel].arp && arp[sel].n && i == cur % n ? ui_acc : h ? UI_KC[0] : UI_M0;
+        ui_rect(x - (h ? 4 : 2), y - (h ? 4 : 2), h ? 9 : 5, h ? 9 : 5, c);
+    }
+}
 static void pic_arp(void)                       /* Arp: what it holds; its steps (13 at most) as standing ribbons of
                                                  * light, as tall as the note is high, swaying, the melody a ribbon over
                                                  * their tips, the step playing in the accent; none: a calm ribbon,
@@ -1794,7 +1846,8 @@ static void pic_arp(void)                       /* Arp: what it holds; its steps
     if (now >= (int32_t)from && now < (int32_t)(from + k)) ui_rect(PX0 + 2 + sp / 2 + (now - (int32_t)from) * sp, 142, 5, 3, ui_acc);
 }
 
-static uint32_t lfo_dot(void) { return (uint32_t)(((uint64_t)lfo_ph[sel] * 54u) >> 32); }   /* the dot's column */
+static uint32_t lfo_ix(void) { return page == PG_LFO2 || page == PG_LFO2M; }   /* (the page's LFO: 0, 1) */
+static uint32_t lfo_dot(void) { return (uint32_t)(((uint64_t)lfo_ph[sel][lfo_ix()] * 54u) >> 32); }   /* the dot's column */
 static int32_t lfo_row(uint32_t sh, uint32_t x)  /* the picture's SHAPE at column x (0..53, a cycle): its row */
 {
     static const int16_t R[7] = {9000, -20000, 26000, -6000, 15000, -28000, 9000};   /* (RANDOM, DRIFT: an example) */
@@ -1807,13 +1860,14 @@ static int32_t lfo_row(uint32_t sh, uint32_t x)  /* the picture's SHAPE at colum
 static void pic_lfo(void)                       /* Lfo: a cycle of SHAPE as a ribbon of aurora, as wide a band as
                                                  * DEPTH, the dot where the LFO is (at its rate), a cycle's time */
 {
-    uint32_t sh = (uint32_t)clamp(trk[sel].lfo_shape, 0, NLFOSHAPE - 1), dx = lfo_dot(), x;
-    uint32_t ms = 3932160000u / lfo_hz_q16(trk[sel].lfo_rate);
-    int32_t y[54], yb[54], dep = clamp(trk[sel].lfo_depth, 0, 100), b = 2 + dep * 7 / 100, k;
+    uint32_t li = lfo_ix(), sh = (uint32_t)clamp(lf_get(sel, li, 3u), 0, NLFOSHAPE - 1), dx = lfo_dot(), x;
+    uint32_t ms = 3932160000u / lfo_hz_q16(lf_get(sel, li, 0u));
+    int32_t y[54], yb[54], dep = clamp(lf_get(sel, li, 1u), 0, 100), b = 2 + dep * 7 / 100, k;
     uint16_t lc = dep > 0 ? UI_KC[3] : UI_M0;   /* (SHAPE's colour; DEPTH 0: dim) */
     char l[32];
-    lfo_rate_text(put_s(l, ms >= 995u ? "1 CYCLE = " : ""), trk[sel].lfo_rate, " ");
-    put_s(l + ui_len(l), " / FREE");
+    if (lf_sync[sel][li]) put_s(put_s(l, "1 CYCLE = "), LS_DIV_NAME[clamp(lf_get(sel, li, 0u), 0, NLSDIV - 1)]);
+    else lfo_rate_text(put_s(l, ms >= 995u ? "1 CYCLE = " : ""), lf_get(sel, li, 0u), " ");
+    put_s(put_s(l + ui_len(l), " / "), LFO_MODE_NAME[clamp(lf_mode[sel][li], 0, NLFOMODE - 1)]);
     ui_caption(l, 0);
     for (x = 0; x < 54u; x += 2u) ui_rect(PX0 + (int32_t)x * 4, PY0 + 62, 2, 1, UI_KC[2]);   /* (the middle) */
     for (x = 0; x < 54u; x++) y[x] = PY0 + lfo_row(sh, x) * 4 + 2;
@@ -2080,7 +2134,7 @@ static void ui_pic_draw(void)
         case ENG_WHEEL: pic_wheel(); return;
         case ENG_PHYS: pic_phys(); return;
         case ENG_HOWL: pic_howl(); return;
-        case ENG_DRUM: pic_drum(); return;
+        case ENG_KICK: case ENG_SNARE: case ENG_CLAP: case ENG_TOM: case ENG_HATS: pic_drum(); return;
         default: pic_phase(); return;
         }
     case PG_SOURCE: pic_source(); return;
@@ -2096,7 +2150,8 @@ static void ui_pic_draw(void)
     case PG_PATTERN: pic_pattern(); return;
     case PG_SCALE: case PG_CHORD: pic_sel(); return;
     case PG_ARP: pic_arp(); return;
-    case PG_LFO: pic_lfo(); return;
+    case PG_LFO: case PG_LFO2: case PG_LFO1M: case PG_LFO2M: pic_lfo(); return;
+    case PG_EUC: pic_euc(); return;
     case PG_DRONE: pic_drone(); return;
     case PG_BANK: case PG_BANK2: pic_bank(); return;
     case PG_DRUM1: case PG_DRUM2: pic_drum(); return;
@@ -2164,7 +2219,7 @@ static uint32_t ui_pic_key(void)
         UI_H(seq_bpm);
         for (k = 0; k < SEQ_N; k++)
             UI_H(P->st[k].note), UI_H(P->st[k].chance), UI_H(P->st[k].ratchet), UI_H(P->st[k].len),
-                UI_H(P->st[k].chord), UI_H(P->st[k].lmask);
+                UI_H(P->st[k].chord), UI_H(lk_step_n(sel, k));
     }
 #undef UI_H
     return h;
@@ -2307,7 +2362,7 @@ static void ui_update(int32_t oct)
         an_t = fm1_ms;
         ui_home_frame(!all);
     }
-    if (((page == PG_SOUND && (sel_eng() == ENG_HOWL || sel_eng() == ENG_DRUM)) || ui_anim_page(page)) && fm1_ms - an_t >= UI_ANIM_MS) {   /* EditHOWL,
+    if (((page == PG_SOUND && (sel_eng() == ENG_HOWL || eng_drum(sel_eng()))) || ui_anim_page(page)) && fm1_ms - an_t >= UI_ANIM_MS) {   /* EditHOWL,
                                                  * the aurora pages: their ribbons move */
         an_t = fm1_ms;
         hw_ph++;

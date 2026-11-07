@@ -21,7 +21,32 @@ PY
 mkdir -p build/compat
 GRIMM_SAVE_IN=tests/data/a1.2-saves.bin GRIMM_STATE_OUT=build/compat/a1.2-state.txt build/host/grimm build/compat/run \
     tests/data/compat.txt > /dev/null
-if cmp -s tests/data/a1.2-state.txt build/compat/a1.2-state.txt; then
+if python3 - tests/data/a1.2-state.txt build/compat/a1.2-state.txt <<'PY'
+# (Arctic Scream 1.5: the locks a list now. Compared as what they mean: a step's locked values only; the work's bytes
+# but its lock block, which the step lines carry)
+import sys
+# a track's list holds 96: past that, a 1.2 project's locks (its test data has one on nearly every step) are left out
+# (its first 96 kept, step by step)
+def norm(p):
+    out, locks, hexs, t = [], {}, [], -1
+    for ln in open(p):
+        w = ln.split()
+        if w and w[0] == "track": t += 1
+        if len(w) == 11 and w[0].isdigit():
+            m = int(w[6])
+            for j in range(4):
+                if m >> j & 1: locks.setdefault(t, []).append((int(w[0]), j, w[7 + j]))
+            out.append(" ".join(w[:6]))
+        elif w and all(c in "0123456789abcdef" for c in w[0]) and len(w[0]) > 8: hexs.append(w[0])
+        else: out.append(ln.strip())
+    b = bytes.fromhex("".join(hexs))
+    lk0 = 4 * 56 + 20 + 4 * 260                  # (tracks, globals, sequences; then the locks, 4 x 288)
+    return out, b[:lk0] + b[lk0 + 4 * 288:], locks
+a, b = norm(sys.argv[1]), norm(sys.argv[2])
+ok = a[0] == b[0] and a[1] == b[1] and all(b[2].get(t, []) == a[2].get(t, [])[:96] for t in range(4))
+sys.exit(0 if ok else 1)
+PY
+then
     echo "saves  Arctic Scream 1.2's project loads as in 1.2"
 else
     echo "saves  FAILED: Arctic Scream 1.2's project loads otherwise (diff tests/data/a1.2-state.txt build/compat/a1.2-state.txt)"
@@ -44,6 +69,8 @@ python3 tests/bank_test.py build/host/grimm
 python3 tests/drum_test.py build/host/grimm
 # the pages' order: FX tapped / held, SELECT through the pages, EDIT's SOURCE last, the headers (tests/ui_test.py)
 python3 tests/ui_test.py build/host/grimm
+# ENV AHD on every source, two LFOs and their modes, the drums a source each, EUCLID, KEYS: STEPS / NOTES, EDO keys, WARP and MORPH everywhere (tests/play_test.py)
+python3 tests/play_test.py build/host/grimm
 # SYSTEM 3's CC MAP: fixed CCs by channel, MIDI LEARN first, saved (tests/ccmap_test.py)
 python3 tests/ccmap_test.py build/host/grimm
 # LATCH: every factory sound, SYSTEM 3 both ways, EDIT, SEL + OCT+, slots, the project, PHYS (tests/latch_test.py)

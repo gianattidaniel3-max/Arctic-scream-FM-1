@@ -29,7 +29,10 @@
 #define REL_END (1 << 15)                       /* Q24: a release ends here, 54 dB down (a voice's last ~16 LSB, -66 dBFS;
                                                  * Felucca's 1 << 12 rendered the last ~2.7 s of a 6 s release unheard) */
 enum { ST_OFF, ST_ATK, ST_SUS, ST_REL, ST_FADE };
-enum { ENG_VA, ENG_FM, ENG_SAMPLE, ENG_VOICE, ENG_WHEEL, ENG_PHYS, ENG_PHASE, ENG_HOWL, ENG_DRUM, NENG };
+enum { ENG_VA, ENG_FM, ENG_SAMPLE, ENG_VOICE, ENG_WHEEL, ENG_PHYS, ENG_PHASE, ENG_HOWL, ENG_KICK, ENG_SNARE, ENG_CLAP,
+       ENG_TOM, ENG_HATS, NENG };               /* (Arctic Scream: the drums, a source each: drum.c) */
+#define ENG_DRUM ENG_KICK                       /* (1.4's one DRUM source: its saves' 8, now KICK's) */
+static int eng_drum(int32_t e) { return e >= ENG_KICK && e <= ENG_HATS; }
 
 typedef struct {
     volatile uint32_t req;                      /* main loop: + 1 after want_* */
@@ -37,6 +40,7 @@ typedef struct {
     volatile uint8_t stage, trk, note, eng;     /* audio: ST_*, the track, the note and the engine it plays */
     volatile int32_t env;                       /* audio: Q24 */
     uint32_t seen;                              /* audio: the req it acted on */
+    uint32_t hold;                              /* audio: AHD's HOLD, control steps left at the top */
     int32_t amp, rng;                           /* the block's end amplitude (Q15); a random state for the engine */
     uint32_t ph[VPH];                           /* the engine's phases */
     int32_t s[4];                               /* .. and its other state (VA: the filter) */
@@ -74,7 +78,7 @@ typedef struct {
     volatile int32_t warp, morph;               /* HOME: WARP, MORPH 0..127 (chaos.c) */
     volatile int32_t bk_mode, bk_ring, bk_mix, bk_wind, bk_glacier;   /* BANK, BANK 2 (bank.c) */
 } track_t;
-#define TRK_DEF {ENG_VA, {{0, 10, 90, 30}, {0, 64, 64, 20}, {0, 0, 127, 0}, {0, 12, 64, 10}, {4, 0, 40, 0}, {0, 64, 80, 64}, {0, 0, 60, 0}, {96, 64, 50, 40}, {0, 58, 55, 110}}, 100, 0, 100, 0, 64, 0, \
+#define TRK_DEF {ENG_VA, {{0, 10, 90, 30}, {0, 64, 64, 20}, {0, 0, 127, 0}, {0, 12, 64, 10}, {4, 0, 40, 0}, {0, 64, 80, 64}, {0, 0, 60, 0}, {96, 64, 50, 40}, {0, 58, 55, 110}, {0, 40, 50, 105}, {0, 55, 50, 105}, {0, 48, 60, 110}, {0, 80, 30, 80}}, 100, 0, 100, 0, 64, 0, \
                  {60, 85, 51, 105}, 0, 0, 0, 0, 0, 4, 1, 50, 40, 30, 9, 0, 84, 24, 100, 0, 0, {{0}}}
 static track_t trk[NT] = {TRK_DEF, TRK_DEF, TRK_DEF, TRK_DEF};   /* VA: SAW, DETUNE 10, CUTOFF 90, RESONANCE 30
                                                  * (Felucca's ANALOG); FM: BELL as made, DETUNE 20; SAMPLE: slot 1,
@@ -154,7 +158,8 @@ static int16_t vx_pool[NV][VX_POOL] __attribute__((section(".pool")));
 #include "howl.c"                               /* (Arctic Scream p0larpatch: the feedback loop, after Audrey II) */
 #include "drum.c"                               /* the DRUM source: FNTSMG-1's models (fg/) */
 static const engine_t *const ENGINES[NENG] = {&VA_ENGINE, &FM_ENGINE, &SAMPLE_ENGINE, &FORMANT_ENGINE, &WHEEL_ENGINE,
-                                              &PHYS_ENGINE, &PHASE_ENGINE, &HOWL_ENGINE, &DRUM_ENGINE};   /* (by ENG_) */
+                                              &PHYS_ENGINE, &PHASE_ENGINE, &HOWL_ENGINE, &KICK_ENGINE, &SNARE_ENGINE, &CLAP_ENGINE, &TOM_ENGINE,
+                                              &HATS_ENGINE};   /* (by ENG_) */
 
 /* (V2) GENERATE's notes (gen.c): a voice's volume (0: full; else x / 256) and attack (0: the track's ATTACK; else
  * GEN_ATK's k - 1), asked with the note (gen_vel, gen_atk: the next note_on's), taken as it begins */
@@ -203,15 +208,36 @@ static void voice_begin(voice_t *v)             /* a note from silence */
 /* the tracks' ENV as steps, from the knobs, once a render: ATTACK a linear step (Q24 a control step), DECAY and RELEASE
  * the share of the way left a control step (Q16: 60 dB in the time), SUSTAIN (Q24). The times: ATTACK 1 ms x
  * 2^(v 20 / 192) (~9.6 s at 127), DECAY 10 ms x 2^(v 15 / 192) (~9.7 s), RELEASE 10 ms x 2^(v 16.5 / 192) (~19 s) */
-typedef struct { int32_t atk, sus; uint32_t dec, rel; } env_c_t;
+typedef struct { int32_t atk, sus; uint32_t dec, rel, hold, adec; } env_c_t;
 static env_c_t env_c[NT];
+/* (Arctic Scream) ENV's MODE: ADSR (the knobs above) or AHD (ENV again on its page): ATTACK, HOLD (0 .. ~2 s at the top),
+ * DECAY (to silence); a note let go changes nothing (it runs its course). AHD shapes the drums too (drum.c) */
+enum { EM_ADSR, EM_AHD };
+static volatile int32_t env_mode[NT], ahd[NT][3] = {{0, 20, 60}, {0, 20, 60}, {0, 20, 60}, {0, 20, 60}};
+static int32_t lfo_move(uint32_t t, uint32_t dest, int32_t v, int32_t mx);   /* (lfo.c) */
+static uint32_t ahd_hold_ms(int32_t v) { v = clamp(v, 0, 127); return (uint32_t)(v * v * 2000 / 16129); }
 static uint32_t env_k(uint32_t t_ms_q16)        /* 60 dB in t: 6.9 / (t / 0.726 ms) of the way a control step, Q16 */
 {
     uint32_t k = (uint32_t)((((uint64_t)328516u) << 16) / t_ms_q16);   /* (64 / 32: the chip's divide) */
     return k > 52429u ? 52429u : k ? k : 1u;
 }
-static void env_coef(env_c_t *c, const volatile int32_t *e)
+static void env_coef(env_c_t *c, const volatile int32_t *e, uint32_t t)
 {
+    int32_t m[4], i;                            /* (its LFOs on ATTACK, DECAY, RELEASE; AHD: ATTACK, HOLD, DECAY) */
+    if (env_mode[t] == EM_AHD) {
+        uint32_t ta = pow2_q16(lfo_move(t, 13u, clamp(ahd[t][0], 0, 127), 127) * 20);
+        uint32_t td = 10u * pow2_q16(lfo_move(t, 15u, clamp(ahd[t][2], 0, 127), 127) * 15);
+        uint32_t a = (uint32_t)((((uint64_t)12173913u) << 16) / ta);
+        c->atk = (int32_t)(a > (1u << 24) ? 1u << 24 : a ? a : 1u);
+        c->hold = ahd_hold_ms(lfo_move(t, 14u, clamp(ahd[t][1], 0, 127), 127)) * 1378u / 1000u;
+        c->adec = env_k(td);
+        c->dec = c->rel = c->adec, c->sus = 0;
+        return;
+    }
+    for (i = 0; i < 4; i++) m[i] = e[i];
+    m[0] = lfo_move(t, 13u, clamp(m[0], 0, 127), 127), m[1] = lfo_move(t, 14u, clamp(m[1], 0, 127), 127);
+    m[3] = lfo_move(t, 15u, clamp(m[3], 0, 127), 127);
+    e = m;
     uint32_t ta = pow2_q16(clamp(e[0], 0, 127) * 20), td = 10u * pow2_q16(clamp(e[1], 0, 127) * 15);
     uint32_t tr = 10u * pow2_q16((clamp(e[3], 0, 127) * 33) >> 1);   /* (ms, Q16) */
     uint32_t a = (uint32_t)((((uint64_t)12173913u) << 16) / ta);       /* 2^24 / (t / 0.726 ms) */
@@ -230,7 +256,7 @@ static int32_t env_tick(voice_t *v)
     if (v->req != v->seen) {                    /* the main loop's request */
         v->seen = v->req;
         if (!v->want_on) {
-            if (v->stage == ST_ATK || v->stage == ST_SUS)
+            if ((v->stage == ST_ATK || v->stage == ST_SUS) && env_mode[v->trk % NT] != EM_AHD)   /* (AHD: its course) */
                 v->stage = ST_REL;
         } else if (v->stage == ST_OFF) {
             voice_begin(v);
@@ -248,9 +274,17 @@ static int32_t env_tick(voice_t *v)
         if (e >= (1 << 24)) {
             e = 1 << 24;
             v->stage = ST_SUS;
+            v->hold = c->hold;
         }
         break;
-    case ST_SUS: {                              /* DECAY to SUSTAIN, and SUSTAIN */
+    case ST_SUS:
+        if (env_mode[v->trk % NT] == EM_AHD) {  /* AHD: HOLD at the top, then DECAY to silence */
+            if (v->hold) { v->hold--; break; }
+            e -= mulq16(e, c->adec);
+            if (e < REL_END) e = 0, v->stage = ST_OFF;
+            break;
+        }
+        {                                       /* DECAY to SUSTAIN, and SUSTAIN */
         int32_t d = mulq16(e - c->sus, c->dec);
         e -= d ? d : e > c->sus ? 1 : e < c->sus ? -1 : 0;
         break;
@@ -299,7 +333,7 @@ static uint32_t voices_render(int32_t (*tb)[VB], uint32_t n)
             continue;
         if (!envd) {                            /* the tracks' ENV, as the knobs are now (once a render) */
             for (k = 0; k < NT; k++)
-                env_coef(&env_c[k], trk[k].env);
+                env_coef(&env_c[k], trk[k].env, k);
             envd = 1;
         }
         for (k = 0; k < NV; k++) {

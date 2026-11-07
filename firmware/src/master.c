@@ -137,10 +137,10 @@ static void dr_wet(const int32_t *x, int32_t *w, uint32_t n, uint32_t ty, int32_
 #define TD_T {127, 127, 127, 127}
 static volatile int32_t td_amt[NT], td_type[NT], td_tone[NT] = TD_T, td_mix[NT] = TD_T;
 static int32_t td_lp[NT];
-static int td_on(uint32_t t) { return td_amt[t] > 0; }
+static int td_on(uint32_t t) { return td_amt[t] > 0 || lfo_move(t, LD_DRIVE, 0, 127) > 0; }
 static void td_run(uint32_t t, int32_t *x, uint32_t n)   /* audio: track t's n samples (mono), in place */
 {
-    int32_t a = clamp(td_amt[t], 0, 127), g, lv, tc, mx, lp = td_lp[t];
+    int32_t a = lfo_move(t, LD_DRIVE, clamp(td_amt[t], 0, 127), 127), g, lv, tc, mx, lp = td_lp[t];   /* (its LFOs on AMOUNT) */
     uint32_t ty = (uint32_t)clamp(td_type[t], 0, NDTYPE - 1), i;
     if (!a) { td_lp[t] = 0; return; }
     g = drv_gain(ty, a), lv = dr_level(ty, a);

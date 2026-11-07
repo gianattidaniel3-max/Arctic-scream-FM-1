@@ -93,7 +93,8 @@ static int bk_wanted(uint32_t t, uint32_t used)  /* it runs this block */
 static void bk_run(uint32_t t, int32_t *x, uint32_t n)
 {
     bank_t *B = &bk[t];
-    int32_t ringv = clamp(trk[t].bk_ring, 0, 127), mix = clamp(trk[t].bk_mix, 0, 127) * 258, wind = clamp(trk[t].bk_wind, 0, 127);
+    int32_t ringv = lfo_move(t, LD_BKRING, clamp(trk[t].bk_ring, 0, 127), 127), mix = lfo_move(t, LD_BKMIX, clamp(trk[t].bk_mix, 0, 127), 127) * 258,
+            wind = clamp(trk[t].bk_wind, 0, 127);
     int32_t q = (int32_t)(pow2_q16(-ringv * 192 / 18) << 13);   /* (0.5 .. 0.5 / 2^7, Q30) */
     int32_t ns = wind ? (int32_t)(((uint32_t)wind * pow2_q16(ringv * 192 / 36 - ringv * 3)) >> 20) : 0;   /* (the narrower, the more
                                                  * goes in: as loud at any RING, with mk) */

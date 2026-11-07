@@ -61,7 +61,8 @@ ev = [(t, f"btn {LFO}"), (t + 50, "probe"), (t + 100, f"enc {SELECT} 1"), (t + 1
       (t + 250, "probe"), (t + 300, f"enc {SELECT} 1"), (t + 350, "probe"), (t + 400, f"down {HOME}"), (t + 1100, f"up {HOME}"),
       (t + 1150, "probe"), (t + 1200, f"enc {SELECT} 2"), (t + 1250, "probe")]
 p = run("pages", ev, t + 1300)
-check(hdr(p[t + 50]).endswith("|1/1") and hdr(p[t + 150]) == hdr(p[t + 50]), f"LFO: one page ({hdr(p[t + 50])})")
+check(hdr(p[t + 50]).startswith("LFO|LFO 1 T1") and hdr(p[t + 50]).endswith("|1/4") and hdr(p[t + 150]).startswith("LFO|LFO 1 MODE") and hdr(p[t + 150]).endswith("|2/4"),
+      f"LFO: LFO 1 1/4, SELECT: LFO 1 MODE 2/4 ({hdr(p[t + 50])}, {hdr(p[t + 150])})")
 check(hdr(p[t + 250]).endswith("|1/2") and hdr(p[t + 350]).endswith("|2/2"), f"SEL: SCALE 1/2, SELECT: CHORD 2/2 ({hdr(p[t + 250])}, {hdr(p[t + 350])})")
 check(hdr(p[t + 1150]) == "HOME|SYSTEM|1/3" and hdr(p[t + 1250]) == "HOME|SYSTEM 3|3/3", f"HOME held: SYSTEM 1/3, SELECT: SYSTEM 3 3/3 ({hdr(p[t + 1150])}, {hdr(p[t + 1250])})")
 

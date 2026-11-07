@@ -47,7 +47,7 @@
 #define LOCK_PK 288u                            /* a track's step locks: 64 x the four values, 64 x 4 bits which */
 #define SLOT_LEN(tn, sq, lk) (4u + NT * ((tn) + (sq) + (lk)))   /* a slot: [0] used, its tracks, sequences, locks */
 #define SONG_PK 20u                             /* the song: its chain (16), MODE, the mutes and solos, TUNING (its steps; 0: 12), a TUNING's own scale + 1 | FIELD << 7 */
-#define FX2_PK 92u                              /* (V2, version 8) MASTER's four, DRIVE's four; (version 9) BANK: five a track; (10) DRUM: twelve; (11) the track's DRIVE: four a track */
+#define FX2_PK 172u                             /* (V2, version 8) MASTER's four, DRIVE's four; (version 9) BANK: five a track; (10) DRUM: twelve; (11) the track's DRIVE: four a track; (12) ENV's MODE and AHD, LFO 2, the LFOs' MODE pages, EUCLID: twenty a track */
 #define WORK_LEN(tn, sg, sq, lk, fm, fx) (NT * ((tn) + (sq) + (lk)) + 16u + 4u + (sg) + (fm) + (fx))   /* the working
                                                  * project: tracks, effects, tempo, slot, .., sequences, locks, the
                                                  * song, the FM patches, MASTER and DRIVE (an older version's sizes: sg
@@ -59,10 +59,10 @@
 #define OBJ_HDR 12u                             /* magic, the save count, type, version, length */
 #define OBJ_MAGIC 0x4B504441u                   /* "ADPK" (Arctic Scream p0larpatch's own: its tracks are longer than GR!MM's,
                                                  * so neither reads the other's saves; GR!MM's was "GRMK") */
-#define OBJ_VER 11u
+#define OBJ_VER 13u
 #define SLS_VER 6u                              /* the slots' stream (its layout as version 6's) */
-#define NOBJV 10u
-static const uint16_t OBJ_VERS[NOBJV][7] = {{11, TRK_PK, 20, 260, 288, FM_ALL, FX2_PK}, {10, TRK_PK, 20, 260, 288, FM_ALL, 76}, {9, TRK_PK, 20, 260, 288, FM_ALL, 28}, {8, TRK_PK, 20, 260, 288, FM_ALL, 8}, {7, TRK_PK, 20, 260, 288, FM_ALL, 0},
+#define NOBJV 12u
+static const uint16_t OBJ_VERS[NOBJV][7] = {{13, TRK_PK, 20, 260, 288, FM_ALL, FX2_PK}, {12, TRK_PK, 20, 260, 288, FM_ALL, FX2_PK}, {11, TRK_PK, 20, 260, 288, FM_ALL, 92}, {10, TRK_PK, 20, 260, 288, FM_ALL, 76}, {9, TRK_PK, 20, 260, 288, FM_ALL, 28}, {8, TRK_PK, 20, 260, 288, FM_ALL, 8}, {7, TRK_PK, 20, 260, 288, FM_ALL, 0},
                                             {6, 52, 20, 260, 288, 0, 0}, {5, 52, 20, 196, 0, 0, 0},
                                             {4, 52, 0, 196, 0, 0, 0}, {3, 48, 0, 196, 0, 0, 0},
                                             {2, 44, 0, 196, 0, 0, 0}};   /* the versions loaded, newest first: a
@@ -77,7 +77,7 @@ static const uint16_t OBJ_VERS[NOBJV][7] = {{11, TRK_PK, 20, 260, 288, FM_ALL, F
 enum { OBJ_WORK, OBJ_SLOTS };
 enum { CAT_DRONE, CAT_PAD, CAT_BELL, CAT_ORGAN, CAT_KEYS, CAT_BASS, CAT_TEXTURE, CAT_VOICE, CAT_OTHER, NCAT };
 static const char *const CAT_NAME[NCAT] = {"DRONE", "PAD", "BELL", "ORGAN", "KEYS", "BASS", "TEXTURE", "VOICE", "OTHER"};
-_Static_assert(NENG <= PK_ENG + 2u, "a save keeps every source's settings (the eighth, HOWL, at bytes 52..55)");
+_Static_assert(NENG <= PK_ENG + 6u, "a save keeps every source's settings (the eighth, HOWL, at bytes 52..55)");
 _Static_assert(SND_N * SND_SIZE <= 4096u && OBJ_HDR + WORK_PK + 4u <= 4096u && 4u * SLOT_ALL <= SLS_N * SLS_P &&
                SAVE_NSECT >= 3u + SLS_N, "the save sectors");
 
@@ -521,24 +521,29 @@ static const uint8_t *uk_seq(const uint8_t *q, uint32_t t, uint32_t sq)   /* (sq
     }
     return q + sq;
 }
-static uint8_t *pk_lock(uint8_t *q, uint32_t t) /* the step locks: a step's four values, then a nibble a step: which */
+/* the parameter locks: (Arctic Scream, version 13; a slot: its byte 1) the track's list, LK_N x step, knob, value
+ * (step 0xFF: none); before it: a step's four SOUND values, then a nibble a step: which (made into the list) */
+_Static_assert(LK_N * 3u == LOCK_PK, "the lock list: as the old locks' size");
+static uint8_t *pk_lock(uint8_t *q, uint32_t t)
 {
-    const seq_pat_t *P = &seq[t].pat[0];
-    uint32_t k, j;
-    for (k = 0; k < SEQ_N; k++)
-        for (j = 0; j < 4u; j++) q[k * 4u + j] = P->st[k].lv[j];
-    for (k = 0; k < SEQ_N / 2u; k++)
-        q[SEQ_N * 4u + k] = (uint8_t)((P->st[2u * k].lmask & 15u) | (P->st[2u * k + 1u].lmask & 15u) << 4);
+    uint32_t i;
+    for (i = 0; i < LK_N; i++) q[i * 3u] = lk_e[t][i].st, q[i * 3u + 1u] = lk_e[t][i].pid, q[i * 3u + 2u] = lk_e[t][i].v;
     return q + LOCK_PK;
 }
-static const uint8_t *uk_lock(const uint8_t *q, uint32_t t, uint32_t lk)   /* (lk 0: saved before locks, none) */
+static const uint8_t *uk_lock(const uint8_t *q, uint32_t t, uint32_t lk, int list)   /* (lk 0: saved before locks,
+                                                 * none; list: the list, else the old four a step) */
 {
-    seq_pat_t *P = &seq[t].pat[0];
     uint32_t k, j;
-    for (k = 0; k < SEQ_N; k++) {
-        for (j = 0; j < 4u; j++) P->st[k].lv[j] = lk ? q[k * 4u + j] : 0;
-        P->st[k].lmask = lk ? (uint8_t)(q[SEQ_N * 4u + k / 2u] >> (k & 1u ? 4 : 0) & 15u) : 0;
-    }
+    lk_clear(t);
+    if (!lk) return q;
+    if (list)
+        for (k = 0; k < LK_N; k++) {
+            lk_e[t][k].st = q[k * 3u] < SEQ_N ? q[k * 3u] : 0xFFu, lk_e[t][k].pid = q[k * 3u + 1u], lk_e[t][k].v = q[k * 3u + 2u];
+        }
+    else
+        for (k = 0; k < SEQ_N; k++)
+            for (j = 0; j < 4u; j++)
+                if (q[SEQ_N * 4u + k / 2u] >> ((k & 1u ? 4u : 0u) + j) & 1u) lk_set(t, k, j, q[k * 4u + j]);
     return q + lk;
 }
 
@@ -575,13 +580,26 @@ static void pk_work(uint8_t *q)
         q[4] = (uint8_t)clamp(trk[t].bk_glacier, 0, 127);
     }
     for (t = 0; t < NT; t++, q += 12) {         /* DRUM: SOUND's four, DRUM 1 and 2's eight */
-        for (k = 0; k < 4u; k++) q[k] = (uint8_t)clamp(trk[t].p[ENG_DRUM][k], 0, 127);
-        q[0] = (uint8_t)(0x80u | (uint32_t)clamp(trk[t].p[ENG_DRUM][0], 0, NDENT - 1));   /* (MODEL's entry; 1.4.0's: 0 MEMBRANE, 1 HAIL) */
+        uint32_t de = eng_drum(trk[t].eng) ? (uint32_t)trk[t].eng : ENG_KICK;   /* (the track's drum, or KICK's) */
+        for (k = 0; k < 4u; k++) q[k] = (uint8_t)clamp(trk[t].p[de][k], 0, 127);
+        q[0] = (uint8_t)(0x80u | ((de - ENG_KICK) * DM_NPR + (uint32_t)clamp(trk[t].p[de][0], 0, DM_NPR - 1)));   /* (its entry; 1.4.0's: 0 MEMBRANE, 1 HAIL) */
         for (k = 0; k < DM_DEEP; k++) q[4u + k] = (uint8_t)clamp(dm_v[t][k], 0, 127);
     }
     for (t = 0; t < NT; t++, q += 4)            /* (11) the track's DRIVE */
         q[0] = (uint8_t)clamp(td_amt[t], 0, 127), q[1] = (uint8_t)clamp(td_type[t], 0, NDTYPE - 1),
         q[2] = (uint8_t)clamp(td_tone[t], 0, 127), q[3] = (uint8_t)clamp(td_mix[t], 0, 127);
+    for (t = 0; t < NT; t++, q += 20) {         /* (12) ENV's MODE, AHD; LFO 2; the MODE pages; EUCLID; LFO 1's DESTINATION whole */
+        uint32_t i;
+        q[0] = (uint8_t)clamp(env_mode[t], 0, 1);
+        for (i = 0; i < 3u; i++) q[1u + i] = (uint8_t)clamp(ahd[t][i], 0, 127);
+        q[4] = (uint8_t)clamp(lf2_rate[t], 0, 127), q[5] = (uint8_t)clamp(lf2_depth[t], 0, 100);
+        q[6] = (uint8_t)clamp(lf2_dest[t], 0, NLFODEST - 1), q[7] = (uint8_t)clamp(lf2_shape[t], 0, NLFOSHAPE - 1);
+        for (i = 0; i < 2u; i++)
+            q[8u + i * 4u] = (uint8_t)clamp(lf_mode[t][i], 0, NLFOMODE - 1), q[9u + i * 4u] = (uint8_t)clamp(lf_start[t][i], 0, 127),
+            q[10u + i * 4u] = (uint8_t)clamp(lf_fade[t][i], 0, 127), q[11u + i * 4u] = (uint8_t)clamp(lf_sync[t][i], 0, 1);
+        q[16] = (uint8_t)clamp(eu_hits[t], 0, 32), q[17] = (uint8_t)clamp(eu_steps[t], 1, 32), q[18] = (uint8_t)clamp(eu_rot[t], 0, 31);
+        q[19] = (uint8_t)clamp(trk[t].lfo_dest, 0, NLFODEST - 1);
+    }
 }
 enum { UW_GLOBALS = 1, UW_CHAIN = 2 };
 static void uk_work(const uint8_t *q, uint32_t f, const uint16_t *vs)   /* (f: UW_GLOBALS, the effects, tempo, slot,
@@ -600,7 +618,7 @@ static void uk_work(const uint8_t *q, uint32_t f, const uint16_t *vs)   /* (f: U
     }
     q += 20;
     for (t = 0; t < NT; t++) q = uk_seq(q, t, sq);
-    for (t = 0; t < NT; t++) q = uk_lock(q, t, lk);
+    for (t = 0; t < NT; t++) q = uk_lock(q, t, lk, vs[0] >= 13u);
     for (t = 0; t < NT; t++) uk_fm(fm ? q + sg + t * FM_PK : 0, t);   /* (saved before them: the PATCH as built) */
     if (globals) {                              /* (V2) MASTER, DRIVE; saved before them: MASTER open, DRIVE off */
         const uint8_t *x = q + sg + fm;
@@ -616,10 +634,12 @@ static void uk_work(const uint8_t *q, uint32_t f, const uint16_t *vs)   /* (f: U
         }
         for (t = 0; t < NT; t++) {              /* (DRUM; saved before it: as it comes) */
             const uint8_t *y = fx >= 76u ? x + 28u + t * 12u : 0;
-            trk[t].p[ENG_DRUM][0] = !y ? 0 : y[0] & 0x80u ? clamp(y[0] & 0x7f, 0, NDENT - 1) : (int32_t)((y[0] ? DM_HAIL : DM_MEMB) * DM_NPR);
-            dm_init(t), dm_def(t, (uint32_t)trk[t].p[ENG_DRUM][0]);
+            int32_t en = !y ? 0 : y[0] & 0x80u ? clamp(y[0] & 0x7f, 0, NDENT - 1) : (int32_t)((y[0] ? DM_HAIL : DM_MEMB) * DM_NPR);
+            uint32_t de = ENG_KICK + (uint32_t)en / DM_NPR;   /* (1.4's DRUM, saved as 8: the source its entry's model is) */
+            if (eng_drum(trk[t].eng)) trk[t].eng = (int32_t)de;
+            dm_init(t), dm_def(t, (uint32_t)en);
             if (y) {
-                for (k = 1; k < 4u; k++) trk[t].p[ENG_DRUM][k] = clamp(y[k], 0, 127);
+                for (k = 1; k < 4u; k++) trk[t].p[de][k] = clamp(y[k], 0, 127);
                 for (k = 0; k < DM_DEEP; k++) dm_v[t][k] = clamp(y[4u + k], 0, 127);
             }
         }
@@ -627,6 +647,19 @@ static void uk_work(const uint8_t *q, uint32_t f, const uint16_t *vs)   /* (f: U
             const uint8_t *y = fx >= 92u ? x + 76u + t * 4u : 0;
             td_amt[t] = y ? clamp(y[0], 0, 127) : 0, td_type[t] = y ? clamp(y[1], 0, NDTYPE - 1) : 0;
             td_tone[t] = y ? clamp(y[2], 0, 127) : 127, td_mix[t] = y ? clamp(y[3], 0, 127) : 127;
+        }
+        for (t = 0; t < NT; t++) {              /* (12; before it: ADSR, LFO 2 off, FREE, EUCLID every step) */
+            const uint8_t *y = fx >= 172u ? x + 92u + t * 20u : 0;
+            uint32_t i;
+            env_mode[t] = y ? clamp(y[0], 0, 1) : EM_ADSR;
+            for (i = 0; i < 3u; i++) ahd[t][i] = y ? clamp(y[1u + i], 0, 127) : (i == 0u ? 0 : i == 1u ? 20 : 60);
+            lf2_rate[t] = y ? clamp(y[4], 0, 127) : 40, lf2_depth[t] = y ? clamp(y[5], 0, 100) : 0;
+            lf2_dest[t] = y ? clamp(y[6], 0, NLFODEST - 1) : LD_PAN, lf2_shape[t] = y ? clamp(y[7], 0, NLFOSHAPE - 1) : 0;
+            for (i = 0; i < 2u; i++)
+                lf_mode[t][i] = y ? clamp(y[8u + i * 4u], 0, NLFOMODE - 1) : 0, lf_start[t][i] = y ? clamp(y[9u + i * 4u], 0, 127) : 0,
+                lf_fade[t][i] = y ? clamp(y[10u + i * 4u], 0, 127) : 0, lf_sync[t][i] = y ? clamp(y[11u + i * 4u], 0, 1) : 0;
+            eu_hits[t] = y ? clamp(y[16], 0, 32) : 16, eu_steps[t] = y ? clamp(y[17], 1, 32) : 16, eu_rot[t] = y ? clamp(y[18], 0, 31) : 0;
+            if (y) trk[t].lfo_dest = clamp(y[19], 0, NLFODEST - 1);
         }
     }
     if (globals && !sg) sc_tuning = TN_12, sc_field = 0;
@@ -643,7 +676,7 @@ static void uk_work(const uint8_t *q, uint32_t f, const uint16_t *vs)   /* (f: U
 static void pk_slot(uint8_t *q)                 /* the four tracks, their sequences and locks into a slot (used) */
 {
     uint32_t t;
-    q[0] = 1, q[1] = q[2] = q[3] = 0;
+    q[0] = 1, q[1] = 1, q[2] = q[3] = 0;        /* (q[1]: its locks a list, version 13's) */
     q += 4;
     for (t = 0; t < NT; t++) q = pk_track(q, t);
     for (t = 0; t < NT; t++) q = pk_seq(q, t);
@@ -653,10 +686,11 @@ static void pk_slot(uint8_t *q)                 /* the four tracks, their sequen
 static void uk_slot(const uint8_t *q, int isr)
 {
     uint32_t t;
+    int list = q[1] == 1u;
     q += 4;
     for (t = 0; t < NT; t++) q = uk_track(q, t, isr, TRK_PK);
     for (t = 0; t < NT; t++) q = uk_seq(q, t, SEQ_PK);
-    for (t = 0; t < NT; t++) q = uk_lock(q, t, LOCK_PK);
+    for (t = 0; t < NT; t++) q = uk_lock(q, t, LOCK_PK, list);
     for (t = 0; t < NT; t++) uk_fm(q + t * FM_PK, t);
 }
 
@@ -877,6 +911,9 @@ static void project_new(void)                   /* NEW: the four tracks' power-o
             for (k = 0; k < 4u; k++) trk[t].p[e][k] = T0.p[e][k];
         dm_init(t);
         td_amt[t] = 0, td_type[t] = 0, td_tone[t] = td_mix[t] = 127;   /* (the track's DRIVE: off) */
+        env_mode[t] = EM_ADSR, ahd[t][0] = 0, ahd[t][1] = 20, ahd[t][2] = 60;   /* (ADSR; LFO 2 off, FREE; EUCLID every step) */
+        lf2_rate[t] = 40, lf2_depth[t] = 0, lf2_dest[t] = LD_PAN, lf2_shape[t] = 0, eu_hits[t] = eu_steps[t] = 16, eu_rot[t] = 0;
+        lf_mode[t][0] = lf_mode[t][1] = lf_start[t][0] = lf_start[t][1] = lf_fade[t][0] = lf_fade[t][1] = lf_sync[t][0] = lf_sync[t][1] = 0;
         for (k = 0; k < 4u; k++) trk[t].env[k] = T0.env[k];
         if (trk[t].latch) nq_put(NQ_RELEASE, t, 0);
         trk[t].latch = T0.latch;

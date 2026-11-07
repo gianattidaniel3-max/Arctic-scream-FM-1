@@ -22,9 +22,8 @@ typedef struct {                                /* (bytes: each value fits one; 
     volatile uint8_t note, chance, ratchet, len;   /* note 0: OFF, else 1..127; CHANCE 0..100; RATCHET 1..4; LENGTH 1..64 */
     volatile uint8_t chord;                     /* a chord step: 0x80 | VOICING << 4 | CHORD TYPE (recorded in chord
                                                  * mode: its chord, chord mode on or not); 0: a note */
-    volatile uint8_t lmask, lv[4];              /* its locks: which of the source's four (bits), their values */
-} seq_step_t;
-_Static_assert(sizeof(seq_step_t) == 10u, "a step: 10 bytes");
+} seq_step_t;                                   /* (its locks: the track's lock list, lk_e) */
+_Static_assert(sizeof(seq_step_t) == 5u, "a step: 5 bytes");
 typedef struct { seq_step_t st[SEQ_N]; } seq_pat_t;
 typedef struct {
     volatile int32_t steps, div, swing, mode;   /* PATTERN SETTINGS: 1..64, SEQ_DIV_T's, 0..127, SEQ_ */
@@ -62,16 +61,95 @@ static volatile uint32_t gen_on;                /* (V2) main loop: bit t: track 
                                                  * unheard */
 static void gen_tick(uint32_t t);               /* (gen.c: a tick of track t, from arp_tick) */
 
+/* (Arctic Scream) parameter locks, Elektron's way: a track's list of (step, knob, value), any knob of the pages that
+ * hold the track's sound and its FX (a knob: its page x 4 + its number; the SOUND page's four: 0..3), a step with or
+ * without a note (a trigless lock). A step plays: the last step's locks give their knobs back, its own take theirs
+ * (SOUND's four through lk_m, as a voice reads them; the others written, their values kept, till the next step) */
+#define LK_N 96u                                /* locks a track (its pattern's), in all */
+typedef struct { uint8_t st, pid, v; } lock_t;   /* (st 0xFF: a free place) */
+static lock_t lk_e[NT][LK_N];
+#define LK_ACT 8u                               /* a step's knobs written at once, at most */
+static volatile int32_t *lk_ptr[NT][LK_ACT];    /* audio: the knobs a step's locks hold now, */
+static int32_t lk_base[NT][LK_ACT];             /* .. their own values (given back) */
+static uint32_t lk_na[NT];
+static volatile int32_t *knob_param_t(uint32_t pg, uint32_t k, uint32_t t);   /* (grimm.c: a knob of track t's) */
+static int32_t lk_find(uint32_t t, uint32_t st, uint32_t pid)   /* the lock of step st on knob pid: its place, -1 none */
+{
+    uint32_t i;
+    for (i = 0; i < LK_N; i++)
+        if (lk_e[t][i].st == st && lk_e[t][i].pid == pid) return (int32_t)i;
+    return -1;
+}
+static int lk_set(uint32_t t, uint32_t st, uint32_t pid, int32_t v)   /* main loop: 0 ok, -1 full */
+{
+    int32_t i = lk_find(t, st, pid);
+    uint32_t j;
+    if (i < 0)
+        for (j = 0; j < LK_N && i < 0; j++)
+            if (lk_e[t][j].st == 0xFFu) i = (int32_t)j;
+    if (i < 0) return -1;
+    lk_e[t][i].pid = (uint8_t)pid, lk_e[t][i].v = (uint8_t)clamp(v, 0, 255), lk_e[t][i].st = (uint8_t)st;
+    return 0;
+}
+static uint32_t lk_step_n(uint32_t t, uint32_t st)   /* step st's locks, how many */
+{
+    uint32_t i, n = 0;
+    for (i = 0; i < LK_N; i++) n += lk_e[t][i].st == st;
+    return n;
+}
+static void lk_clear_step(uint32_t t, uint32_t st)
+{
+    uint32_t i;
+    for (i = 0; i < LK_N; i++)
+        if (lk_e[t][i].st == st) lk_e[t][i].st = 0xFFu;
+}
+static void lk_clear(uint32_t t) { uint32_t i; for (i = 0; i < LK_N; i++) lk_e[t][i].st = 0xFFu; }
+static void lk_restore(uint32_t t)              /* audio: the knobs a step's locks held, their own values again */
+{
+    while (lk_na[t]) {
+        lk_na[t]--;
+        *lk_ptr[t][lk_na[t]] = lk_base[t][lk_na[t]];
+    }
+    lk_m[t] = 0;
+}
+static void lk_apply(uint32_t t, uint32_t st)   /* audio: step st begins: its locks */
+{
+    uint32_t i, m = 0;
+    lk_restore(t);
+    for (i = 0; i < LK_N; i++) {
+        const lock_t *L = &lk_e[t][i];
+        if (L->st != st) continue;
+        if (L->pid < 4u) {                      /* SOUND's: as a voice reads them (lfo.c lfo_params, drum_run.c) */
+            m |= 1u << L->pid, lk_v[t][L->pid] = L->v;
+        } else if (lk_na[t] < LK_ACT) {
+            volatile int32_t *p = knob_param_t(L->pid >> 2, L->pid & 3u, t);
+            if (!p) continue;
+            lk_ptr[t][lk_na[t]] = p, lk_base[t][lk_na[t]] = *p, lk_na[t]++;
+            *p = L->v;
+        }
+    }
+    lk_m[t] = m;
+}
+static void lk_turned(volatile int32_t *p, int32_t v)   /* main loop: knob p turned to v while a lock holds it: its own
+                                                 * value is v (given back so) */
+{
+    uint32_t t, i;
+    for (t = 0; t < NT; t++)
+        for (i = 0; i < lk_na[t]; i++)
+            if (lk_ptr[t][i] == p) lk_base[t][i] = v;
+}
+
 static void seq_clear(void)                     /* main loop: the four sequences empty, 16 steps of 1/16, all OFF */
 {
     uint32_t t, p, i;
+    for (t = 0; t < NT; t++) lk_clear(t);
     for (t = 0; t < NT; t++) {
         seq[t].steps = 16, seq[t].div = 4, seq[t].swing = 0, seq[t].mode = SEQ_FWD;
         for (p = 0; p < SEQ_NPAT; p++)
             for (i = 0; i < SEQ_N; i++) {
                 seq_step_t *s = &seq[t].pat[p].st[i];
                 s->note = 0, s->chance = 100, s->ratchet = 1, s->len = 1;
-                s->chord = 0, s->lmask = 0, s->lv[0] = s->lv[1] = s->lv[2] = s->lv[3] = 0;
+                s->chord = 0;
             }
     }
 }
@@ -160,10 +238,8 @@ static void seq_track_tick(uint32_t t)          /* audio: a tick of track t */
         S->r_next = S->r_sub;
     }
     if (S->t == 0u) {                           /* a step begins: its locks are the sound's till the next (lfo.c) */
-        const seq_step_t *s = &S->pat[clamp(S->cur, 0, SEQ_NPAT - 1)].st[S->pos];
-        uint32_t j;
-        for (j = 0; j < 4u; j++) lk_v[t][j] = s->lv[j];
-        lk_m[t] = s->note && !(gen_on >> t & 1u) ? s->lmask : 0u;   /* (V2: GENERATE: none) */
+        if (gen_on >> t & 1u) lk_restore(t);    /* (V2: GENERATE: none) */
+        else lk_apply(t, (uint32_t)S->pos);     /* (with a note or without: a trigless lock) */
     }
     if (S->t == sw && !(gen_on >> t & 1u))      /* (V2: GENERATE on: the step not played, its place kept) */
         seq_fire(t);
@@ -219,7 +295,7 @@ static void seq_stop(void)                      /* audio (NQ_STOP): all four sto
             }
         seq[t].r_left = 0;
         seq[t].pos = -1;
-        lk_m[t] = 0;                            /* (the knobs' sound again) */
+        lk_restore(t);                          /* (the knobs' sound again) */
     }
 }
 static int seq_tick(void)                       /* audio: a tick while playing (the FM-1's tempo: seq_ctl; a MIDI

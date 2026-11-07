@@ -150,139 +150,40 @@ static struct {
     uint32_t seed;
     uint16_t pk;                                /* (the screen: the last block's peak) */
 } dm[NT];
-static uint32_t dm_model_of(int32_t e) { return (uint32_t)clamp(e, 0, NDENT - 1) / DM_NPR; }
-static uint32_t dm_model(uint32_t t) { return dm_model_of(trk[t].p[ENG_DRUM][0]); }
+/* (Arctic Scream) each model a source of its own now (KICK, SNARE, CLAP, TOM, HATS: ENG_KICK + its DM_), its KNOB 1 its
+ * PRESET (0: the model as it comes, 1..20 FNTSMG-1's); an entry: the model x 21 + the preset */
+static uint32_t dm_model(uint32_t t) { return eng_drum(trk[t].eng) ? (uint32_t)(trk[t].eng - ENG_KICK) : 0u; }
+static uint32_t dm_entry(uint32_t t) { return dm_model(t) * DM_NPR + (uint32_t)clamp(trk[t].p[ENG_KICK + dm_model(t)][0], 0, DM_NPR - 1); }
 static void dm_def(uint32_t t, uint32_t e)      /* an entry's sound: a model as it comes, or a preset (KEYS, WANDER, HUMAN stay) */
 {
     uint32_t md, k;
     const uint8_t *d;
     e = e < NDENT ? e : 0u, md = e / DM_NPR, d = DM_PR[e];
-    for (k = 0; k < 3u; k++) trk[t].p[ENG_DRUM][1u + k] = d[DM_MAP[md][k]];
+    trk[t].p[ENG_KICK + md][0] = (int32_t)(e % DM_NPR);
+    for (k = 0; k < 3u; k++) trk[t].p[ENG_KICK + md][1u + k] = d[DM_MAP[md][k]];
     for (k = 0; k < 5u; k++) dm_v[t][k] = d[DM_MAP[md][3u + k]];
 }
 static void dm_init(uint32_t t) { dm_def(t, 0), dm_v[t][5] = 1, dm_v[t][6] = dm_v[t][7] = 0; }
-static void dm_kill(uint32_t t, uint32_t s)
-{
-    dm_slot_t *v = &dm[t].s[s];
-    switch (dm[t].md[s]) {
-    case DM_MEMB: v->m.kill = FG_DECAY[2]; break;
-    case DM_HAIL: v->h.kill = FG_DECAY[2]; break;
-    case DM_KICK: v->k.kill = FG_DECAY[2]; break;
-    case DM_SNARE: v->s.kill = FG_DECAY[2]; break;
-    default: v->c.kill = FG_DECAY[6]; break;    /* (a clap: as FNTSMG-1's, a little slower) */
-    }
-}
-static uint32_t dm_scale(uint32_t inc, uint32_t f) { return (uint32_t)(((uint64_t)inc * f) >> 16); }
-static void dm_hit(uint32_t t, uint32_t note)
-{
-    uint32_t model = dm_model(t), k, o = dm[t].cur, n = o ^ 1u, vel = 110u, f;
-    uint8_t p[8];
-    int32_t p16 = tn_p16(note) - 48 * 16, w = clamp(dm_v[t][6], 0, 127), h = clamp(dm_v[t][7], 0, 127);
-    uint32_t r;
-    dm[t].seed = dm[t].seed ? dm[t].seed : 2654435769u + t;
-    r = fg_rand(&dm[t].seed);
-    for (k = 0; k < 8u; k++)
-        p[DM_MAP[model][k]] = (uint8_t)clamp(k < 3u ? trk[t].p[ENG_DRUM][1u + k] : dm_v[t][k - 3u], 0, 127);
-    if (!dm_v[t][5]) p16 = 0;                   /* (KEYS OFF) */
-    if (w) p16 += (int32_t)((r >> 8 & 255u) - 128u) * w / 127 * 16 / 128;   /* WANDER: +-1 semitone at its top */
-    if (h) vel = vel * (127u - ((r >> 16 & 255u) * (uint32_t)h >> 8) * 3u / 4u) / 127u;   /* HUMAN */
-    dm_kill(t, o);                              /* the old one out, ~3 ms */
-    dm[t].cur = (uint8_t)n, dm[t].md[n] = (uint8_t)model;
-    f = pow2_q16(p16);                          /* (C3: its TONE) */
-    switch (model) {
-    case DM_MEMB: {
-        fgk_memb_t *v = &dm[t].s[n].m;
-        v->seed = dm[t].seed + 1u;
-        memb_trig(v, p, vel);
-        for (k = 0; k < 4u; k++) v->inc0[k] = dm_scale(v->inc0[k], f), v->inc[k] = v->inc0[k];
-        break;
-    }
-    case DM_KICK: {
-        fgk_sweep_t *v = &dm[t].s[n].k;
-        v->seed = dm[t].seed + 1u;
-        sweep_trig(v, p, vel);
-        v->inc_end = dm_scale(v->inc_end, f);
-        break;
-    }
-    case DM_SNARE: {
-        fgs_voice_t *v = &dm[t].s[n].s;
-        v->seed = dm[t].seed + 1u;
-        voice_trig(v, p, vel);
-        for (k = 0; k < 2u; k++) v->inc0[k] = dm_scale(v->inc0[k], f), v->inc[k] = v->inc0[k];
-        dm[t].lvl[n] = dm_sq2(p[7]);
-        break;
-    }
-    case DM_CLAP: {
-        fgs_clap_t *v = &dm[t].s[n].c;
-        p[0] = (uint8_t)clamp((int32_t)p[0] + p16 * 559 / 1600, 0, 127);   /* (TONE: 1.9 octaves in 127) */
-        v->seed = dm[t].seed + 1u;
-        clap_trig(v, p, vel);
-        dm[t].lvl[n] = dm_sq2(p[7]);
-        break;
-    }
-    default: {
-        fgm_hail_t *v = &dm[t].s[n].h;
-        p[2] = (uint8_t)clamp((int32_t)p[2] + p16 * 341 / 1600, 0, 127);   /* (COLOR: 3.1 octaves in 127) */
-        v->seed = dm[t].seed + 1u;
-        hail_trig(v, p, vel);
-        break;
-    }
-    }
-}
-static int dm_on(uint32_t t, uint32_t s)
-{
-    const dm_slot_t *v = &dm[t].s[s];
-    switch (dm[t].md[s]) {
-    case DM_MEMB: return v->m.on;
-    case DM_HAIL: return v->h.on;
-    case DM_KICK: return v->k.on;
-    case DM_SNARE: return v->s.on;
-    default: return v->c.on;
-    }
-}
-static int dm_wanted(uint32_t t) { return dm_req[t] || dm_on(t, 0) || dm_on(t, 1); }
-static void dm_run(uint32_t t, int32_t *x, uint32_t n)
-{
-    uint32_t s, i, pk = 0, md;
-    int32_t a = clamp(dm_v[t][3], 0, 127), lp = dm[t].sat_lp;
-    int req = dm_req[t];
-    if (req) dm_req[t] = 0, dm_hit(t, (uint32_t)req - 1u);
-    for (s = 0; s < 2u; s++) {
-        dm_slot_t *v = &dm[t].s[s];
-        switch (dm[t].md[s]) {
-        case DM_MEMB: memb_render(&v->m, x, n); break;
-        case DM_HAIL: hail_render(&v->h, x, n); break;
-        case DM_KICK: sweep_render(&v->k, x, n); break;
-        case DM_SNARE: voice_render(&v->s, dm[t].lvl[s], x, n); break;
-        default: clap_render(&v->c, dm[t].lvl[s], x, n); break;
-        }
-    }
-    md = dm[t].md[dm[t].cur];
-    if (md == DM_MEMB || md == DM_KICK) {       /* (DRIVE, as FNTSMG-1's SATURA: on the kicks) */
-        int32_t g = 4096 + a * 290, pres = a * 160;
-        for (i = 0; i < n; i++) {
-            int32_t y = fg_soft((int32_t)(((int64_t)x[i] * g) >> 12));
-            lp += fg_mul15(y - lp, 3113);       /* ~700 Hz */
-            x[i] = y + fg_mul15(y - lp, pres);
-        }
-        dm[t].sat_lp = lp;
-    }
-    for (i = 0; i < n; i++) x[i] = md == DM_HAIL ? x[i] * 2 : x[i] >> 1;   /* (level with the other sources) */
-    for (i = 0; i < n; i += 16u) {
-        uint32_t v = (uint32_t)(x[i] < 0 ? -x[i] : x[i]);
-        if (v > pk) pk = v;
-    }
-    dm[t].pk = (uint16_t)(pk > 65535u ? 65535u : pk);
-}
+/* (Arctic Scream) ENV in AHD shapes the drums too: the hit restarts it */
+static struct { int32_t e; uint32_t st, hold; } dm_env[NT];
 static void drum_begin(voice_t *v) { (void)v; }
 static void drum_block(voice_t *v, const volatile int32_t *p, int32_t *mono, int32_t amp0, int32_t amp1)
 {
     (void)v, (void)p, (void)mono, (void)amp0, (void)amp1;   /* (silent: dm_run plays it) */
 }
-static void drum_text(const volatile int32_t *p, uint32_t k, char *s)
-{
-    if (k == 0u) put_s(s, DM_ENAME[clamp(p[0], 0, NDENT - 1)]);
-    else put_u(s, (uint32_t)clamp(p[k], 0, 127));
-}
-static const engine_t DRUM_ENGINE = {"Drum", {"MODEL", "TONE", "DECAY", "LEVEL"}, {NDENT - 1, 127, 127, 127}, drum_begin,
-                                     drum_block, drum_text};
+#define DM_TEXT(nm, m)                                                                                                 \
+    static void nm(const volatile int32_t *p, uint32_t k, char *s)                                                     \
+    {                                                                                                                  \
+        if (k == 0u) put_s(s, DM_ENAME[(m) * DM_NPR + (uint32_t)clamp(p[0], 0, DM_NPR - 1)]);                          \
+        else put_u(s, (uint32_t)clamp(p[k], 0, 127));                                                                  \
+    }
+DM_TEXT(kick_text, DM_KICK)
+DM_TEXT(snare_text, DM_SNARE)
+DM_TEXT(clap_text, DM_CLAP)
+DM_TEXT(tom_text, DM_MEMB)
+DM_TEXT(hats_text, DM_HAIL)
+static const engine_t KICK_ENGINE = {"Kick", {"PRESET", "TONE", "DECAY", "LEVEL"}, {DM_NPR - 1, 127, 127, 127}, drum_begin, drum_block, kick_text};
+static const engine_t SNARE_ENGINE = {"Snare", {"PRESET", "TONE", "DECAY", "LEVEL"}, {DM_NPR - 1, 127, 127, 127}, drum_begin, drum_block, snare_text};
+static const engine_t CLAP_ENGINE = {"Clap", {"PRESET", "TONE", "DECAY", "LEVEL"}, {DM_NPR - 1, 127, 127, 127}, drum_begin, drum_block, clap_text};
+static const engine_t TOM_ENGINE = {"Tom", {"PRESET", "TONE", "DECAY", "LEVEL"}, {DM_NPR - 1, 127, 127, 127}, drum_begin, drum_block, tom_text};
+static const engine_t HATS_ENGINE = {"Hats", {"PRESET", "DENSITY", "DECAY", "COLOR"}, {DM_NPR - 1, 127, 127, 127}, drum_begin, drum_block, hats_text};

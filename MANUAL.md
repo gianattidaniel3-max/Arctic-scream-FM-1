@@ -32,7 +32,7 @@ Every track starts with **ICE WRAITH**, a Holvut sound that holds its notes: pre
 
 | Control | What it does |
 |---|---|
-| **ALGORITHM** | On HOME and the MIXER pages: picks the track (T1–T4). Every page shows that track. Elsewhere: nothing (yet). |
+| **ALGORITHM** | On HOME and the MIXER pages: picks the track (T1–T4). Every page shows that track. Elsewhere: the keys, right **STEPS** (the sequence's steps), left **NOTES**. |
 | **PRESETS** | On HOME and the MIXER pages: loads the next or previous sound into the track. On the sequencer pages: the cursor (the step). |
 | **SELECT** | On HOME: the tempo. Everywhere else: through the button's pages (the header's `2/6`). |
 
@@ -185,18 +185,29 @@ North Sami names.
 | <img src="docs/manual/screens/env.png" alt="ENV: the envelope as a ribbon" width="320"> | <img src="docs/manual/screens/lfo.png" alt="LFO: the shape as a ribbon" width="320"> |
 
 **ENV** (per track): how each note starts and ends. The envelope hangs as a curtain, each stage in its colour.
+**Press ENV again** on its page to switch the track between **ADSR** and **AHD** (the header says which).
 
-| KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
-|---|---|---|---|
-| ATTACK (~1 ms – 10 s) | DECAY (~10 ms – 10 s) | SUSTAIN (40 % to start) | RELEASE (~10 ms – 20 s) |
+| | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+|---|---|---|---|---|
+| **ADSR** | ATTACK (~1 ms – 10 s) | DECAY (~10 ms – 10 s) | SUSTAIN (40 % to start) | RELEASE (~10 ms – 20 s) |
+| **AHD** | ATTACK | HOLD (0 – 2 s at the top) | DECAY (to silence) | |
 
-**LFO** (per track): slow movement. It never restarts with a note, so drones keep breathing.
+- **AHD** runs its course whether the key is held or not, and it also shapes the **drums** (KICK … HATS), which ADSR leaves alone.
+- With **LATCH ON** a note only stops when you press its key again, so ADSR's RELEASE starts only then.
 
-| KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
-|---|---|---|---|
-| RATE (60 s a cycle – 20 Hz) | DEPTH (0 = off) | DESTINATION | SHAPE |
+**LFO** (per track, two of them): **LFO 1, LFO 1 MODE, LFO 2, LFO 2 MODE** (SELECT or LFO again).
 
-- **Destinations:** PITCH, VOLUME, PAN, the source's four knobs by name, REV SEND, GRAIN SEND, the track's CUTOFF.
+| | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+|---|---|---|---|---|
+| **LFO 1 / LFO 2** | RATE (60 s a cycle – 20 Hz; SYNC: 1/32 – 64 BARS) | DEPTH (0 = off) | DESTINATION | SHAPE |
+| **… MODE** | MODE: FREE, TRIG, HOLD, ONCE, HALF | START (the phase a note restarts it at) | FADE (in after a note) | SYNC (to the tempo) |
+
+- **Modes:** FREE never restarts (drones keep breathing); TRIG restarts at START with each note; HOLD holds its value from
+  each note to the next; ONCE runs one cycle per note and stays; HALF runs half a cycle.
+- **Destinations:** PITCH, VOLUME, PAN, the source's four knobs by name, REV SEND, GRAIN SEND, TRK CUTOFF, RESONANCE,
+  DLY SEND, DRIVE (the track's), ATTACK, DECAY, RELEASE (in AHD: ATTACK, HOLD, DECAY), OTHER RATE and OTHER DEPTH (one LFO
+  moving the other), BANK MIX, BANK RING, DRUM1 K1–K4. On a drum, PITCH and the knobs move each hit; an LFO on PRESET picks
+  the preset per hit.
 - **Shapes:** SINE, TRIANGLE, SAW UP, SAW DOWN, SQUARE, RANDOM, DRIFT.
 
 ---
@@ -224,6 +235,8 @@ North Sami names.
 - **The SCALE screen** shows the twelve normal notes as a keyboard, drawn to the pitch, with one line a key under it, at
   its true pitch. At a TUNING a line is grey on a normal note (within 8 cents), amber above it, blue below it. A key held
   is white and reaches into the keyboard. Below: the note played, by its nearest normal note and the cents off it.
+- **The keys at a TUNING, with a SCALE:** each key plays the scale's next note (no key repeats one, every note sounds; with
+  a twelve-note scale those are its notes, with the EDO's own scales below, their microtones). SCALE OFF: each key one step.
 - **Scales at a TUNING:** the fourteen scales use each note's nearest step. 19 EDO adds KLEISMIC, NEGRI, SEMAPHORE, MAGIC
   and SENSI; 24 EDO adds RAST, BAYATI, SABA, SIKAH and two scales with quarter tones filling whole tones: MIXO ZONES
   (mixolydian, 2nd to 3rd and 7th to root) and MAJOR ZONES (major, 2nd to 3rd and 6th to 7th).
@@ -236,9 +249,9 @@ North Sami names.
   (harmonics 1, 2, 3, 5 of the lowest note), GHOST (CHORD a quarter tone up: at 24 EDO, the other field). **RING:** how
   narrow and how long. **MIX:** dry to bank alone. **WIND:** noise into the bank, so the track sings its pitches over
   silence. When you let go, the bank stays on its last pitches. **BANK 2 > GLACIER:** a new pitch glides there, up to ~8 s.
-- **DRUM** (a source, EDIT > SOURCE): one drum on the track, from FNTSMG-1 by fantasmogenesis. **MODEL:** KICK, SNARE, CLAP, MEMBRANE (toms,
-  hand drums), HAIL (hats, shakers), each followed by its twenty FNTSMG-1 presets (KICK 909, SNARE RIMSHOT, HAIL OPEN HAT…):
-  turn slowly for one at a time; the screen shows the model and the preset.
+- **KICK, SNARE, CLAP, TOM, HATS** (five sources, EDIT > SOURCE): one drum on the track, from FNTSMG-1 by fantasmogenesis.
+  KNOB 1 (and SOURCE's PRESET) is **PRESET:** the drum as it comes, then its twenty FNTSMG-1 presets (KICK 909, SNARE
+  RIMSHOT, HATS OPEN HAT…). A step lock or an LFO on PRESET changes the preset for that hit alone.
   SOUND has its three main knobs, **DRUM 1** and **DRUM 2** the rest, and **KEYS** (the keys tune it, at the TUNING's
   pitches), **WANDER** (each hit's pitch off at random), **HUMAN** (each hit's level off at random). A new MODEL or preset
   sets its sound; KEYS, WANDER and HUMAN stay as they are. Saved with the project; a saved sound keeps MODEL and the three main knobs only.
@@ -249,12 +262,15 @@ North Sami names.
 
 <img src="docs/manual/screens/arp.png" alt="ARP" width="300" align="right">
 
-**ARP** opens the arpeggiator; **hold ARP** to switch it on or off for the track.
+**ARP** opens **EUCLID**, the arpeggiator on a Euclidean rhythm; press again (or SELECT) for **EUCLID 2**; **hold ARP**
+to switch it on or off for the track.
 
-| KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
-|---|---|---|---|
-| MODE | RATE | OCTAVES (1–4) | GATE |
+| | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+|---|---|---|---|---|
+| **EUCLID** | HITS | STEPS (1–32) | ROTATE | RATE |
+| **EUCLID 2** | MODE | OCTAVES (1–4) | GATE | |
 
+- HITS are spread as evenly as possible over STEPS; a hit plays the next note, every other step rests. HITS = STEPS: a plain arp.
 - **Modes:** UP, DOWN, UP-DOWN, RANDOM, AS PLAYED, CHORD. **Rates:** 1/1 to 1/32, and triplets.
 - It plays the keys you hold. With LATCH ON it keeps going after you let go.
 - It follows the sequencer's clock while it plays.
@@ -284,9 +300,18 @@ Each track has its own **64-step** pattern; all four play together on one tempo 
 
 <br clear="right">
 
-- **PRESETS** moves the cursor; **SELECT** goes through SEQ's pages; **hold SEQ + turn SELECT** sets the length. The tempo: on HOME.
+- **SELECT** (or PRESETS) moves the cursor; tap **SEQ** for its pages; **hold SEQ + turn SELECT** sets the length. The tempo: on HOME.
+- **On GRID, play a key** (or a chord in chord mode): it goes into the step shown, and sounds.
+- **The keys as steps:** turn **ALGORITHM** right (anywhere but HOME's pages) for **KEYS: STEPS**: the first 16 keys are
+  the 16 steps of the cursor's page (lit when on, the cursor glowing); a key turns its step on (with the last note you
+  played) or off; the next four keys pick the page (steps 1–16 … 49–64). Turn ALGORITHM left for **KEYS: NOTES**.
 - **Stopped + REC:** each key fills a step and moves on. **Playing + REC:** notes land on the nearest step.
-- **Step locks:** hold **SEL** and turn a knob to lock that value to the step. **SEL + OCT−** clears them.
+- **Parameter locks** (Elektron's way): in **KEYS: STEPS**, hold a step's key and turn **any knob on any page** of the
+  track's sound and FX (SOUND, the drum pages, ENV, LFOs, EUCLID, HOME, MIXER, FX held's DRIVE, BANK, DRONE, the shared FX…):
+  that value is locked to the step, the knob itself untouched; the knobs show the step's locks in the accent while you
+  hold it. A step needs no note for its locks (a trigless lock). Let go without turning: the step on or off. **Step key
+  + OCT−** clears its locks. Up to **96 locks a track**. On SEQ's pages, **SEL + a knob** still locks SOUND's four on the
+  cursor's step, **SEL + OCT−** clears the cursor's.
 - **Hold REC ~1 s:** clears the selected track's pattern (undoable).
 - **Hold SEQ + a white key** (all undoable):
 
@@ -499,6 +524,8 @@ The seven Holvut sounds hold their notes (LATCH) and start with DRONE on.
 | Hold | + | Does |
 |---|---|---|
 | EDIT | OCT− / OCT+ | Undo / redo |
+| EDIT | turn PRESETS | **RANDOMIZE** the page's knobs: right re-rolls them (further right in a row: wilder, up to anywhere in their range), left nudges them a little; undo brings them back |
+| a step's key (KEYS: STEPS) | any knob | Lock it on that step |
 | FX | black keys | GENERATE: T1–T4 on / off, MODE, OCTAVE, RANGE |
 | SEL | (alone, let go) | Chord mode on / off |
 | SEL | a knob (sequencer pages) | Lock that value to the step |

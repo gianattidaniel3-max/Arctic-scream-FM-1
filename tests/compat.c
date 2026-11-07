@@ -26,13 +26,19 @@ static void compat_fill_seq(void)               /* every track's pattern: a vari
         for (k = 0; k < SEQ_N; k++) {
             seq_step_t *s = &seq[t].pat[0].st[k];
             if (!cp_r(4)) {                     /* (an empty step) */
-                s->note = 0, s->chance = 100, s->ratchet = 1, s->len = 1, s->chord = 0, s->lmask = 0;
+                s->note = 0, s->chance = 100, s->ratchet = 1, s->len = 1, s->chord = 0, lk_clear_step(t, k);
                 continue;
             }
             s->note = 1 + cp_r(127), s->chance = cp_r(101), s->ratchet = 1 + cp_r(4), s->len = 1 + cp_r(SEQ_N);
             s->chord = cp_r(3) ? 0 : 0x80u | cp_r(NVOICING) << 4 | cp_r(NCHORD);
-            s->lmask = cp_r(16);
-            for (j = 0; j < 4u; j++) s->lv[j] = (uint8_t)cp_r(256);
+            {                                   /* (the SOUND locks: as the old four a step, the same draws) */
+                uint32_t m = cp_r(16);
+                lk_clear_step(t, k);
+                for (j = 0; j < 4u; j++) {
+                    uint32_t lv = cp_r(256);
+                    if (m >> j & 1u) lk_set(t, k, j, (int32_t)lv);
+                }
+            }
         }
     }
 }
@@ -61,8 +67,11 @@ static void compat_exit(void)                   /* tests/host.c: at the end of t
                     (int)seq[t].swing, (int)seq[t].mode);
             for (k = 0; k < SEQ_N; k++) {
                 const seq_step_t *s = &seq[t].pat[0].st[k];
+                int32_t m = 0, lv[4] = {0, 0, 0, 0}, j, i;
+                for (j = 0; j < 4; j++)
+                    if ((i = lk_find(t, k, (uint32_t)j)) >= 0) m |= 1 << j, lv[j] = lk_e[t][i].v;
                 fprintf(f, "%2u %3d %3d %d %2d %3d %2d %3d %3d %3d %3d\n", k, (int)s->note, (int)s->chance,
-                        (int)s->ratchet, (int)s->len, (int)s->chord, (int)s->lmask, s->lv[0], s->lv[1], s->lv[2], s->lv[3]);
+                        (int)s->ratchet, (int)s->len, (int)s->chord, (int)m, (int)lv[0], (int)lv[1], (int)lv[2], (int)lv[3]);
             }
         }
         pk_work(st_img);

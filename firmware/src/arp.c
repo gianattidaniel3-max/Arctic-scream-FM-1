@@ -33,6 +33,16 @@ typedef struct {
     uint32_t was;                               /* ARP on, as last seen */
 } arp_t;
 static arp_t arp[NT];
+/* (Arctic Scream) EUCLID: the arp's steps on a Euclidean rhythm, HITS of STEPS (1..32) spread as evenly as can be,
+ * ROTATE'd; a step that is no hit rests (its note let go). HITS = STEPS: the arp as ever */
+static volatile int32_t eu_hits[NT] = {16, 16, 16, 16}, eu_steps[NT] = {16, 16, 16, 16}, eu_rot[NT];
+static uint32_t eu_pos[NT];                     /* audio: the step of the rhythm due */
+static int eu_hit(uint32_t t, uint32_t i)       /* the rhythm's step i: a hit? (Bresenham: Bjorklund's, rotated) */
+{
+    uint32_t n = (uint32_t)clamp(eu_steps[t], 1, 32), k = (uint32_t)clamp(eu_hits[t], 0, (int32_t)n);
+    i = (i + (uint32_t)clamp(eu_rot[t], 0, 31)) % n;
+    return (i * k) % n < k;
+}
 static volatile int32_t arp_rec = -1;           /* main loop: the track live-recording its arp (REC, playing), or -1 */
 static uint32_t arp_acc;                        /* audio: the clock's samples (Q16) while the sequencer stands */
 
@@ -131,7 +141,9 @@ static void arp_tick(uint32_t t, int locked)    /* audio: a tick of track t's ar
     A->ft++;
     if (due) {
         A->since = 0;
-        arp_step(t);
+        if (eu_hit(t, eu_pos[t]++)) arp_step(t);   /* EUCLID: a hit plays the next step; a rest lets go */
+        else arp_release(t);
+        if (eu_pos[t] >= (uint32_t)clamp(eu_steps[t], 1, 32)) eu_pos[t] = 0;
     }
 }
 
@@ -175,7 +187,7 @@ static void arp_add(uint32_t t, uint32_t id, uint32_t note, int echo)
     if (arp_has(t, id)) arp_take(t, id, echo);
     ns[0] = (uint8_t)note;
     if (trk[t].chord) n = chord_notes(t, note, ns);
-    if (!A->n) A->ft = 0, A->since = 0, A->pos = 0;   /* the first: it starts (its own clock: at once) */
+    if (!A->n) A->ft = 0, A->since = 0, A->pos = 0, eu_pos[t] = 0;   /* the first: it starts (its own clock: at once; EUCLID from its first step) */
     for (i = 0; i < n && A->n < ARP_N; i++) {
         A->note[A->n] = ns[i], A->id[A->n] = (uint8_t)id, A->root[A->n] = (uint8_t)note;
         A->n++;

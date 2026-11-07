@@ -36,13 +36,14 @@ def rms(x):
     return float(np.sqrt((x ** 2).mean()))
 
 
-MEMB, HAIL = 63, 84                                  # MODEL: KICK, SNARE, CLAP, MEMBRANE, HAIL, each 21 (its presets)
+MEMB, HAIL = 63, 84                                  # entries: KICK, SNARE, CLAP, TOM (MEMBRANE), HATS (HAIL), 21 each
+ENG_KICK = 8                                         # (the drums: sources 8 .. 12, KICK .. HATS; KNOB 1: PRESET 0 .. 20)
 
 
-def src(model=MEMB, edo=12):
-    ev = [(100, f"btn {EDIT}"), (140, f"btn {EDIT}"), (180, f"enc {K1} 8")]     # SOURCE: DRUM (SOUND after it)
+def src(model=MEMB, edo=12):                         # an entry: its source (SOURCE), its PRESET (SOUND's KNOB 1)
+    ev = [(100, f"btn {EDIT}"), (140, f"btn {EDIT}"), (170, f"enc {K1} -20"), (180, f"enc {K1} {ENG_KICK + model // 21}")]
     ev += [(220, f"btn {SEL}"), (240, f"enc 4 {EDOS.index(edo) - 3}"), (280, f"btn {EDIT}")]
-    if model: ev.append((320, f"enc {K1} {model}"))
+    if model % 21: ev.append((320, f"enc {K1} {model % 21}"))
     return ev
 
 
@@ -115,7 +116,7 @@ sv = OUT / "save.bin"
 run("save", src(HAIL) + [(440, f"btn {EDIT}"), (500, f"enc {K2} 11")], 5000, {**os.environ, "GRIMM_SAVE_OUT": str(sv)})
 p = run("load", [(400, "probe")], 500, {**os.environ, "GRIMM_SAVE_IN": str(sv)})
 m = re.search(r" drum ([\d,]+)", p)
-check(m and m.group(1).startswith(f"8,{HAIL},") and m.group(1).split(",")[6] == "11", f"saved, power on: {m and m.group(1)}")
+check(m and m.group(1).startswith(f"{ENG_KICK + 4},0,") and m.group(1).split(",")[6] == "11", f"saved, power on: HATS, its DRUM 1 ({m and m.group(1)})")
 p = run("old", [(400, "probe")], 500, {**os.environ, "GRIMM_SAVE_IN": "tests/data/a1.2-saves.bin"})
 m = re.search(r" drum ([\d,]+)", p)
 check(m and m.group(1).split(",")[1] == "0", f"a project from before it loads: {m and m.group(1)}")
@@ -136,13 +137,13 @@ ka, kb = f0(audio("kk", 0.75, 1.0), 20, 200), f0(audio("kk2", 0.75, 1.0), 20, 20
 check(abs(1200 * np.log2(kb / ka) - 1200) < 40, f"KICK: KEYS, an octave up ({ka:.1f}, {kb:.1f} Hz)")
 p = run("pr", src(0) + [(900, f"enc {K1} 4"), (950, "probe")], 1000)   # (slowly: a step a detent)
 m = re.search(r" drum ([\d,]+)", p)
-check(m and m.group(1).split(",")[1] == "4" and m.group(1).split(",")[2:5] == ["66", "30", "109"], f"MODEL to KICK HARD: its sound ({m and m.group(1)})")
+check(m and m.group(1).split(",")[1] == "4" and m.group(1).split(",")[2:5] == ["66", "30", "109"], f"PRESET to KICK HARD: its sound ({m and m.group(1)})")
 run("sn", src(21) + hit(48) + hit(48, 1400), 2500)
 check(rms(audio("sn", 1.4, 1.8)) > 200, "SNARE: a second hit")
 if len(sys.argv) > 2:                               # a save from 1.4.0 (its HAIL: 1): HAIL
     p = run("v140", [(400, "probe")], 500, {**os.environ, "GRIMM_SAVE_IN": sys.argv[2]})
     m = re.search(r" drum ([\d,]+)", p)
-    check(m and m.group(1).split(",")[1] == str(HAIL), f"1.4.0's save: HAIL as it was ({m and m.group(1)})")
+    check(m and m.group(1).split(",")[0] == str(ENG_KICK + 4), f"1.4.0's save: HAIL as it was, now HATS ({m and m.group(1)})")
 
 print("drum test: " + ("FAILED" if bad else "passed"))
 sys.exit(1 if bad else 0)

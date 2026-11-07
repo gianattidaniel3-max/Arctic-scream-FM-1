@@ -87,7 +87,10 @@ static void host_probe(void)
             printf(" lv %u %u %u ch1 %d snd1 %s", lv_rvk, lv_dlk, lv_pre, (int)trk[0].chord, nm[0] ? nm : "-");
         }
         printf(" tuning %d scale %d field %d", (int)tn_edo(), (int)sc_now(), (int)sc_field);
-        printf(" drum %d,%d,%d,%d,%d,%d,%d", (int)trk[sel].eng, (int)trk[sel].p[ENG_DRUM][0], (int)trk[sel].p[ENG_DRUM][1], (int)trk[sel].p[ENG_DRUM][2], (int)trk[sel].p[ENG_DRUM][3], (int)dm_v[sel][0], (int)dm_v[sel][1]);
+        {
+            int de = eng_drum(trk[sel].eng) ? (int)trk[sel].eng : ENG_KICK;   /* (the track's drum source, or KICK's) */
+            printf(" drum %d,%d,%d,%d,%d,%d,%d", (int)trk[sel].eng, (int)trk[sel].p[de][0], (int)trk[sel].p[de][1], (int)trk[sel].p[de][2], (int)trk[sel].p[de][3], (int)dm_v[sel][0], (int)dm_v[sel][1]);
+        }
         printf(" mute %u solo %u chord %d latch2 %d", (unsigned)trk_mute, (unsigned)trk_solo, (int)trk[sel].chord, (int)trk[sel].latch);
         printf(" trk %d lvl %d cut %d res %d rev %d ccm %d", (int)sel, (int)trk[sel].level, (int)trk[sel].cut, (int)trk[sel].res, (int)trk[sel].rev, (int)(set.latch >> 1 & 1u));
         {                                       /* (the header as the screen shows it: "FX|TAPE|1/6", spaces as _) */
@@ -95,6 +98,14 @@ static void host_probe(void)
             ui_head_text();
             snprintf(h, sizeof h, "%s|%s|%s", ui_hb, ui_hl, ui_hr);
             for (q = h; *q; q++) if (*q == ' ') *q = '_';
+            {
+                uint32_t i, n = 0;
+                for (i = 0; i < LK_N; i++) n += lk_e[sel][i].st != 0xFFu;
+                printf(" lks %u sp %d,%d,%d,%d", n, (int)trk[sel].p[clamp(trk[sel].eng, 0, NENG - 1)][0], (int)trk[sel].p[clamp(trk[sel].eng, 0, NENG - 1)][1],
+                       (int)trk[sel].p[clamp(trk[sel].eng, 0, NENG - 1)][2], (int)trk[sel].p[clamp(trk[sel].eng, 0, NENG - 1)][3]);
+            }
+            printf(" lph %u,%u kbs %u envm %d cur %d,%d", (unsigned)lfo_ph[sel][0], (unsigned)lfo_ph[sel][1], (unsigned)kb_steps, (int)env_mode[sel],
+                   (int)seq[sel].cursor, (int)seq[sel].pat[0].st[clamp(seq[sel].cursor, 0, SEQ_N - 1)].note);
             printf(" hdr %s td %d,%d,%d,%d spre %d", h, (int)td_amt[sel], (int)td_type[sel], (int)td_tone[sel], (int)td_mix[sel], (int)src_pre[sel]);
         }
         printf(" bank %d,%d,%d,%d,%d", (int)trk[sel].bk_mode, (int)trk[sel].bk_ring, (int)trk[sel].bk_mix, (int)trk[sel].bk_wind, (int)trk[sel].bk_glacier);
