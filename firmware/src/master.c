@@ -132,6 +132,29 @@ static void dr_wet(const int32_t *x, int32_t *w, uint32_t n, uint32_t ty, int32_
     }
 }
 #undef DR_RUN
+/* the track's own DRIVE (FX held): the same four TYPEs on one track's sound, before its BANK and its filter; AMOUNT,
+ * TONE, MIX as the master's, no limiter (the master's is after it all). AMOUNT 0: bypassed */
+#define TD_T {127, 127, 127, 127}
+static volatile int32_t td_amt[NT], td_type[NT], td_tone[NT] = TD_T, td_mix[NT] = TD_T;
+static int32_t td_lp[NT];
+static int td_on(uint32_t t) { return td_amt[t] > 0; }
+static void td_run(uint32_t t, int32_t *x, uint32_t n)   /* audio: track t's n samples (mono), in place */
+{
+    int32_t a = clamp(td_amt[t], 0, 127), g, lv, tc, mx, lp = td_lp[t];
+    uint32_t ty = (uint32_t)clamp(td_type[t], 0, NDTYPE - 1), i;
+    if (!a) { td_lp[t] = 0; return; }
+    g = drv_gain(ty, a), lv = dr_level(ty, a);
+    tc = td_tone[t] >= 127 ? 32768 : (int32_t)(pow2_q16((clamp(td_tone[t], 0, 127) - 127) * 12) >> 1) + 160;
+    mx = clamp(td_mix[t], 0, 127) * 258;
+    for (i = 0; i < n; i++) {
+        int32_t y = (clamp(x[i], -131071, 131071) * g) >> 8;
+        y = (dr_shape(ty, y) * lv) >> 12;
+        if (tc < 32768) lp += ((y - lp) >> 1) * tc >> 14, y = lp;   /* TONE */
+        if (mx < 32766) y = x[i] + (((y - x[i]) >> 2) * mx >> 13);   /* MIX */
+        x[i] = y;
+    }
+    td_lp[t] = lp;
+}
 static void drive_render(int32_t *out, uint32_t n)   /* audio: DRIVE and its limiter on the mix (n frames, L R) */
 {
     int32_t a = clamp(dr_amt, 0, 127), g, lv, tc, mx, env = dr_env, l0 = dr_lp[0], l1 = dr_lp[1];

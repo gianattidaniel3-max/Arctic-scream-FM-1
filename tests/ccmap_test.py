@@ -39,7 +39,8 @@ p = run("on", ON + [cc(1500, 0, 102, 127), cc(1520, 0, 74, 0), cc(1540, 0, 7, 64
 check(v(p, "ccm") == "1", "SYSTEM 3: CC MAP on")
 check(v(p, "bank").startswith("3,"), f"channel 1, CC 102: T1's BANK MODE to the top ({v(p, 'bank')})")
 check(v(p, "cut") == "0" and v(p, "lvl") == "64" and v(p, "res") == "127" and v(p, "rev") == "127", "CC 74, 7, 71, 91: cutoff, level, resonance, reverb")
-p = run("ch2", ON + [cc(1500, 1, 102, 127), PR, (2100, f"enc {ALGO} 1"), (2300, "probe")], 2400)
+p = run("ch2", ON + [cc(1500, 1, 102, 127), PR, (2050, "btn 2"), (2070, f"btn {HOME}"), (2100, f"enc {ALGO} 1"),   # (HOME: ALGORITHM picks the track)
+                 (2300, "probe")], 2400)
 lines = [l for l in p.splitlines() if l.startswith("probe")]
 check(v(lines[0], "bank").startswith("0,"), "channel 2: not T1")
 check(v(lines[1], "trk") == "1" and v(lines[1], "bank").startswith("3,"), "channel 2: T2")

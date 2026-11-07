@@ -42,6 +42,8 @@ python3 tests/tuning_test.py build/host/grimm
 python3 tests/bank_test.py build/host/grimm
 # The DRUM source: hits, KEYS at the TUNING's pitches, DRUM 1 and 2, through BANK, saves (tests/drum_test.py)
 python3 tests/drum_test.py build/host/grimm
+# the pages' order: FX tapped / held, SELECT through the pages, EDIT's SOURCE last, the headers (tests/ui_test.py)
+python3 tests/ui_test.py build/host/grimm
 # SYSTEM 3's CC MAP: fixed CCs by channel, MIDI LEARN first, saved (tests/ccmap_test.py)
 python3 tests/ccmap_test.py build/host/grimm
 # LATCH: every factory sound, SYSTEM 3 both ways, EDIT, SEL + OCT+, slots, the project, PHYS (tests/latch_test.py)

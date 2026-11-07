@@ -131,7 +131,8 @@ def channels():                                 # MIDI CHANNEL CH 5 > SEL, USB a
           (2000, "midi 0x94 60 100"), (2050, "probe"), (2100, "midi 0x84 60 0"),
           (2200, "midi 0x90 62 100"), (2250, "probe"), (2300, "midi 0x80 62 0"),
           (2400, "trs 0x94 64 100"), (2450, "probe"), (2500, "trs 0x84 64 0"), (2550, "probe"),
-          (2600, "enc 1 1"), (2700, "trs 0x94 65 100"), (2750, "probe"), (2800, "trs 0x84 65 0"),
+          (2560, "btn 2"), (2580, "btn 8"), (2600, "enc 1 1"), (2700,   # (HOME: ALGORITHM picks the track there)
+          "trs 0x94 65 100"), (2750, "probe"), (2800, "trs 0x84 65 0"),
           (2900, "midi 0x95 67 100"), (2950, "probe"), (3000, "midi 0x85 67 0")]
     pr, _ = run("channels", ev, 3100)
     # (Arctic Scream: T1 starts as ICE WRAITH, LATCH on, so a note let go stays: each probe is read as what came new)

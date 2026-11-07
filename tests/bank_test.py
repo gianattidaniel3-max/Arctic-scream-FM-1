@@ -16,7 +16,7 @@ BIN = sys.argv[1] if len(sys.argv) > 1 else "build/host/grimm"
 OUT = Path("build/banktest")
 OUT.mkdir(parents=True, exist_ok=True)
 EDOS = [5, 7, 10, 12, 14, 15, 16, 17, 19, 22, 24, 31]
-SEL, LFO, K1, K2, K3, K4 = 3, 5, 2, 3, 4, 5
+SEL, LFO, K1, K2, K3, K4, FX, SELECT = 3, 5, 2, 3, 4, 5, 2, 0
 bad = 0
 
 
@@ -55,11 +55,11 @@ def hz(s):
 def setup(mode, ring=127, mix=127, wind=127, edo=12, glacier=0):
     ev = [(100, f"btn {SEL}"), (140, f"enc 4 {EDOS.index(edo) - 3}"),      # SCALE: TUNING
           (200, f"down {SEL}"), (240, "btn 1"), (280, f"up {SEL}"),       # LATCH off
-          (340, f"btn {LFO}"), (380, f"btn {LFO}"), (420, f"btn {LFO}"),   # BANK
-          (460, f"enc {K1} {mode}")]
-    ev += [(500, f"enc {K2} {ring - 70}"), (520, f"enc {K3} {mix - 90}"), (540, f"enc {K4} {wind}")]
+          (300, f"down {FX}"), (620, f"up {FX}"), (640, f"enc {SELECT} 1"),   # FX held: the track's FX; SELECT: BANK
+          (660, f"enc {K1} {mode}")]
+    ev += [(680, f"enc {K2} {ring - 70}"), (700, f"enc {K3} {mix - 90}"), (720, f"enc {K4} {wind}")]
     if glacier:
-        ev += [(580, f"btn {LFO}"), (620, f"enc {K1} {glacier}")]
+        ev += [(740, f"enc {SELECT} 1"), (760, f"enc {K1} {glacier}")]   # BANK 2
     return ev
 
 

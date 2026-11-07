@@ -145,8 +145,8 @@ static void ui_head_text(void)
     }
     if (P->btn == BTN_SEL)                      /* (Scale: the chord mode, the track on the right) */
         put_s(ui_hl, page == PG_CHORD ? (trk[sel].chord ? "CHORD ON" : "CHORD OFF") : trk[sel].chord ? "SCALE CHORD" : "SCALE");
-    for (p = 0; p < NPAGE; p++)                 /* its number in the button's round: "1/2" */
-        if (PAGES[p].btn == P->btn && pg_on(p)) {
+    for (p = 0; p < NPAGE; p++)                 /* its number in the button's round: "1/2" (a held round: its own) */
+        if (PAGES[p].btn == P->btn && pg_on(p) && pg_grp(p) == pg_grp(page)) {
             n++;
             if (pg_on(page) && pg_key(p) <= pg_key(page)) i++;
         }
@@ -161,21 +161,19 @@ static void ui_head_text(void)
     if (learn_st) put_s(ui_hl, learn_st == 1u ? "TURN A KNOB" : "MOVE A CC");   /* (MIDI LEARN, till it ends) */
     if (as_err) put_s(ui_hl, "SAVE ERROR: RETRYING");
 
-    if (page == PG_SOUNDS) put_u(put_s(ui_hr, "T"), sel + 1u);   /* (Save: the track) */
-    else if (page == PG_PROJECTS) ui_hr[0] = (char)('A' + (slot_cur & 3)), ui_hr[1] = 0;   /* (the slot in use) */
-    else if (ge_freeze && P->btn == BTN_FX) put_s(ui_hr, "FREEZE");
-    else if (page == PG_GRID) put_s(put_u(ui_hr, (uint32_t)seq_steps(&seq[sel])), " ST");   /* (Seq: the steps) */
-    else if (page == PG_HOME) tempo_text(ui_hr, "> ");   /* (Main: the tempo; a MIDI clock's: "EXT 120.4") */
-    else if (P->btn == BTN_SEL) put_u(put_s(ui_hr, "T"), sel + 1u);
-    else if (page == PG_ARP) put_s(ui_hr, trk[sel].latch ? "LATCH" : "");   /* (Arp: LATCH, if on) */
-    else if (page == PG_SYSTEM || page == PG_SYS2 || page == PG_SYS3) put_s(ui_hr, "V" APP_VER);   /* (System: the
-                                                 * version) */
-    else if (page == PG_FMALGO || page == PG_FMOP) put_u(put_s(ui_hr, "OP "), (uint32_t)clamp(fm_op, 0, 5) + 1u);   /* (EditFM:
-                                                 * the operator) */
-    else if (page == PG_SONG) put_u(put_s(put_u(ui_hr, (uint32_t)song_cur() + 1u), "/"), song_length());   /* (Song: the
-                                                 * step, the chain's length) */
+    {                                           /* (what the right side showed before: on the left now, after the page) */
+        char *q = ui_hl + ui_len(ui_hl);
+        if (fm1_ms >= hd_until && !learn_st && !as_err && !save_held && !(sv_wait && fm1_ms - sv_said < SV_SAY_MS)) {
+            if (page == PG_SOUNDS || P->btn == BTN_SEL) put_u(put_s(q, " T"), sel + 1u);
+            else if (page == PG_PROJECTS) q = put_s(q, " "), q[0] = (char)('A' + (slot_cur & 3)), q[1] = 0;
+            else if (page == PG_GRID) put_s(put_u(put_s(q, " "), (uint32_t)seq_steps(&seq[sel])), "ST");
+            else if (page == PG_ARP && trk[sel].latch) put_s(q, " LATCH");
+            else if (page == PG_FMALGO || page == PG_FMOP) put_u(put_s(q, " OP"), (uint32_t)clamp(fm_op, 0, 5) + 1u);
+        }
+    }
+    if (page == PG_HOME) tempo_text(ui_hr, "> ");   /* (HOME: the tempo; a MIDI clock's: "EXT 120.4") */
     else if (!i) put_s(ui_hr, "HOLD");
-    else put_u(put_s(put_u(ui_hr, i), "/"), n);
+    else put_u(put_s(put_u(ui_hr, i), "/"), n);   /* (everywhere else: "2/6") */
     ui_bat = page == PG_HOME && bat_lvl >= 0 ? bat_lvl * 2 + (bat_lvl == 0 && (fm1_ms / 500u & 1u)) : -1;   /* (the
                                                  * battery: where the tempo shows) */
     if (song_mode != SM_OFF) {                  /* a song MODE: SONG, SONG LOOP on every page (the left cut short to
@@ -350,7 +348,10 @@ static void ui_slab_make(uint32_t k, slab_t *S)
         }
         ui_3(S->val, ui_pc(v));
         return;
-    case PG_SOURCE: put_s(S->val, k ? (v ? "ON" : "OFF") : ENGINES[clamp(v, 0, NENG - 1)]->name); return;
+    case PG_SOURCE:
+        if (k == 1u) { char m[24]; src_pre_name(m, v); ui_squeeze(S->val, m); return; }   /* (in full: the picture) */
+        put_s(S->val, k ? (v ? "ON" : "OFF") : ENGINES[clamp(v, 0, NENG - 1)]->name);
+        return;
     case PG_SYSTEM:                             /* COLOUR, MIDI ("ALL": ALL > SEL; "CH5>S": CH 5 > SEL), TUNE, SCREEN
                                                  * OFF ("NVR": full) */
         if (k == 0u) S->fill = (uint8_t)(2 * v + 2), put_s(S->val, COL_NAME[clamp(v, 0, 3)]);
@@ -470,7 +471,7 @@ static void ui_slab_make(uint32_t k, slab_t *S)
         if (k == 2u) { put_s(S->val, FT_NAME[clamp(v, 0, NFTYPE - 1)]); return; }
         if (k == 3u) { put_s(S->val, MP_SHORT[clamp(v, 0, NMPOS - 1)]); return; }
         break;
-    case PG_DRIVE:                              /* (V2) AMOUNT ("OFF": 0), TYPE, TONE ("OPEN"), MIX */
+    case PG_DRIVE: case PG_TDRIVE:              /* (V2) AMOUNT ("OFF": 0), TYPE, TONE ("OPEN"), MIX */
         if (k == 0u && !v) { put_s(S->val, "OFF"); return; }
         if (k == 1u) { put_s(S->val, DT_NAME[clamp(v, 0, NDTYPE - 1)]); return; }
         if (k == 2u && v >= 127) { put_s(S->val, "OPEN"); return; }
@@ -541,7 +542,7 @@ static void ui_tint(uint32_t pg)
     case PG_GRID: case PG_PATTERN: a = BW_VIOLET, b = BW_CYAN, c = BW_PINK, x = BW_MAGENTA; break;
     case PG_SCALE: case PG_CHORD: a = BW_LAVENDER, b = BW_CYAN, c = BW_TEAL, x = BW_AMBER; break;
     case PG_ARP: a = BW_TEAL, b = BW_PINK, c = BW_AMBER, x = BW_CYAN; break;
-    case PG_TAPE: case PG_GRAIN: case PG_DELAY: case PG_SPACE: case PG_PERFORM: case PG_MASTER: case PG_DRIVE:
+    case PG_TAPE: case PG_GRAIN: case PG_DELAY: case PG_SPACE: case PG_PERFORM: case PG_MASTER: case PG_DRIVE: case PG_TDRIVE:
         a = BW_VIOLET, b = BW_SKY, c = BW_GREEN, x = BW_AMBER; break;
     case PG_MIX1: case PG_MIX2: case PG_TRACK: a = BW_CYAN, b = BW_GREEN, c = BW_VIOLET, x = BW_MAGENTA; break;
     case PG_SONG: a = BW_GOLD, b = BW_MAGENTA, c = BW_PERIWINKLE, x = BW_CYAN; break;
@@ -1202,14 +1203,27 @@ static void pic_source(void)                    /* the eight sources, the track'
     int32_t i, e = (int32_t)sel_eng();
     ui_caption("SOURCE", 0);
     for (i = 0; i < (int32_t)NENG; i++) {
-        int32_t y = 44 + i * 14;
-        if (i == e) ui_rect(PX0, y - 3, 108, 13, UI_D);
+        int32_t y = 42 + i * 13;               /* (nine: above the slabs) */
+        if (i == e) ui_rect(PX0, y - 3, 108, 12, UI_D);
         ui_text(PX0 + 4, y, i == e ? ">" : " ", 1, ui_acc);
         ui_text(PX0 + 16, y, ENGINES[i]->name, 1, i == e ? ui_acc : UI_M);
     }
-    ui_text(140, 60, "LATCH", 1, UI_M);
-    ui_rect(140, 74, 64, 24, trk[sel].latch ? ui_acc : UI_D);
-    ui_text(140 + (trk[sel].latch ? 16 : 8), 78, trk[sel].latch ? "ON" : "OFF", 2, trk[sel].latch ? UI_K : UI_L);
+    {                                           /* PRESET: the sound loaded, its name whole (two lines if need be) */
+        char m[24];
+        int32_t n;
+        src_pre_name(m, sel_eng() == ENG_DRUM ? trk[sel].p[ENG_DRUM][0] : src_pre[sel]);
+        ui_text(124, 44, "PRESET", 1, UI_M);
+        n = ui_len(m);
+        if (n > 13) {
+            char m2[24];
+            put_s(m2, m + 13), m[13] = 0;
+            ui_text(124, 70, m2, 1, ui_acc);
+        }
+        ui_text(124, 58, m, 1, ui_acc);
+    }
+    ui_text(124, 96, "LATCH", 1, UI_M);
+    ui_rect(124, 110, 64, 24, trk[sel].latch ? ui_acc : UI_D);
+    ui_text(124 + (trk[sel].latch ? 16 : 8), 114, trk[sel].latch ? "ON" : "OFF", 2, trk[sel].latch ? UI_K : UI_L);
 }
 
 static void pic_env(void)                       /* Env: the shape of the track's ATTACK, DECAY, SUSTAIN, RELEASE as a
@@ -1253,7 +1267,7 @@ static void pic_env(void)                       /* Env: the shape of the track's
 static int ui_anim_page(uint32_t p)             /* the pages whose ribbons move (ui_update) */
 {
     return p == PG_DRONE || p == PG_DRUM1 || p == PG_DRUM2 || p == PG_BANK || p == PG_BANK2 || p == PG_ENV || p == PG_TAPE || p == PG_GRAIN || p == PG_DELAY || p == PG_SPACE || p == PG_LFO ||
-           p == PG_MIX1 || p == PG_MIX2 || p == PG_MASTER || p == PG_DRIVE || p == PG_SOUND || p == PG_FMOP || p == PG_FMALGO || p == PG_SCALE ||
+           p == PG_MIX1 || p == PG_MIX2 || p == PG_MASTER || p == PG_DRIVE || p == PG_TDRIVE || p == PG_SOUND || p == PG_FMOP || p == PG_FMALGO || p == PG_SCALE ||
            p == PG_CHORD || p == PG_PERFORM || p == PG_ARP;
 }
 
@@ -1444,8 +1458,9 @@ static void pic_drive(void)
     static const uint8_t K[3] = {5, 7, 9}, S[3] = {1, 2, 3};
     static const int8_t Y[3] = {-22, 22, 0};
     static const uint16_t DC[3] = {BW_TEAL, BW_LAVENDER, BW_GREEN};
-    uint32_t ty = (uint32_t)clamp(dr_type, 0, NDTYPE - 1);
-    int32_t a = clamp(dr_amt, 0, 127), g = drv_gain(ty, a), lv = dr_level(ty, a), yc[55], yd[55], i, j;
+    int tk = page == PG_TDRIVE;                 /* (the track's own: its knobs) */
+    uint32_t ty = (uint32_t)clamp(tk ? td_type[sel] : dr_type, 0, NDTYPE - 1);
+    int32_t a = clamp(tk ? td_amt[sel] : dr_amt, 0, 127), g = drv_gain(ty, a), lv = dr_level(ty, a), yc[55], yd[55], i, j;
     char r[8];
     ui_3(r, ui_pc(a));
     ui_caption(DT_NAME[ty], a ? r : "OFF");
@@ -2076,7 +2091,7 @@ static void ui_pic_draw(void)
     case PG_DELAY: pic_delay(); return;
     case PG_SPACE: pic_space(); return;
     case PG_MASTER: pic_master(); return;
-    case PG_DRIVE: pic_drive(); return;
+    case PG_DRIVE: case PG_TDRIVE: pic_drive(); return;
     case PG_GRID: pic_grid(); return;
     case PG_PATTERN: pic_pattern(); return;
     case PG_SCALE: case PG_CHORD: pic_sel(); return;

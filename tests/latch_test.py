@@ -68,12 +68,12 @@ for k in range(1, NFACT + 1):
     eng = run("eng", [(300, f"enc 6 {k}"), (500, "probe")], 600, ENV[0])[500]["eng"]
     edit = [(700 + 100 * i, "btn 6") for i in range(4 if eng == ENG_FM else 2)]   # (FM: FM ALGO, FM OP before SOURCE)
     for s in (0, 1):
-        ev = [(300, f"enc 6 {k}"), (600, "probe")] + edit + [(1200, "probe"), (1250, "enc 3 1"), (1300, "probe")]
+        ev = [(300, f"enc 6 {k}"), (600, "probe")] + edit + [(1200, "probe"), (1250, "enc 4 1"), (1300, "probe")]
         ev += tap(1400, C4) + [(1700, "probe")] + tap(1800, C4) + [(2100, "probe")]          # latched; let go
         ev += SEL_OCT(2200) + [(2400, "probe")] + tap(2500, C4) + [(2800, "probe")]          # OFF: not latched
         ev += SEL_OCT(3000) + [(3200, "probe")] + tap(3300, C4) + [(3600, "probe")]          # ON: latched
-        ev += [(3700, "enc 3 -1"), (3900, "probe")]                                          # EDIT OFF: let go
-        ev += [(4000, "enc 3 1")] + tap(4100, E4) + [(4300, f"enc 6 1"), (4500, "probe")]    # latched, a sound loaded
+        ev += [(3700, "enc 4 -1"), (3900, "probe")]                                          # EDIT OFF: let go
+        ev += [(4000, "enc 4 1")] + tap(4100, E4) + [(4250, "btn 8"), (4300, f"enc 6 1"), (4500, "probe")]   # (PRESETS: on HOME)    # latched, a sound loaded
         p = run(f"s{s}_{k}", ev, 4600, ENV[s])
         want = p[600]["saved"] if s == 0 else 0
         nxt = p[4500]["saved"] if s == 0 else 0
@@ -106,7 +106,7 @@ for s in (0, 1):
 for k in range(1, NFACT + 1):
     if run("eng", [(300, f"enc 6 {k}"), (500, "probe")], 600, ENV[0])[500]["eng"] != ENG_PHYS:
         continue
-    ev = [(300, f"enc 6 {k}"), (700, "btn 6"), (800, "btn 6"), (1200, "enc 3 1")]
+    ev = [(300, f"enc 6 {k}"), (700, "btn 6"), (800, "btn 6"), (1200, "enc 4 1")]
     t = 1500
     for kb in (C4, E4, G4, C4, E4, A3, D4):
         ev += tap(t, kb)

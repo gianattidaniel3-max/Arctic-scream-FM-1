@@ -15,7 +15,7 @@
 | [01 · The basics](#01--the-basics) | [07 · Sequencer](#07--sequencer-seq-play-rec) |
 | [02 · HOME](#02--home) | [08 · Slots, sounds and songs](#08--slots-sounds-and-songs-save-glo) |
 | [03 · Sources: EDIT](#03--sources-edit) | [09 · Destroy: FX](#09--destroy-fx) |
-| [04 · DRONE](#04--drone-a-sound-that-lives-on-its-own) | [10 · Perform: hold FX](#10--perform-hold-fx) |
+| [04 · DRONE](#04--drone-a-sound-that-lives-on-its-own) | [10 · The track's own FX: hold FX](#10--the-tracks-own-fx-hold-fx) |
 | [05 · ENV and LFO](#05--env-and-lfo) | [11 · System: hold HOME](#11--system-hold-home) |
 | [06 · Scales, chords, arpeggiator](#06--scales-chords-and-the-arpeggiator-sel-arp) | [12 · Factory sounds](#12--factory-sounds) · [13 · Combos](#13--combos-at-a-glance) · [14 · Editor and demo](#14--the-editor-and-the-demo) |
 
@@ -32,9 +32,12 @@ Every track starts with **ICE WRAITH**, a Holvut sound that holds its notes: pre
 
 | Control | What it does |
 |---|---|
-| **ALGORITHM** | Picks the track (T1–T4). Every page shows that track. |
-| **PRESETS** | Loads the next or previous sound into the track. On the sequencer pages: the tempo. |
-| **SELECT** | On HOME: the tempo. On the sequencer: the cursor. |
+| **ALGORITHM** | On HOME and the MIXER pages: picks the track (T1–T4). Every page shows that track. Elsewhere: nothing (yet). |
+| **PRESETS** | On HOME and the MIXER pages: loads the next or previous sound into the track. On the sequencer pages: the cursor (the step). |
+| **SELECT** | On HOME: the tempo. Everywhere else: through the button's pages (the header's `2/6`). |
+
+Every page's header shows the button, the page and, on the right, where it is in the button's pages (`FX TAPE 1/6`);
+HOME shows the tempo there.
 | **KNOB 1–4** | The four values along the bottom of the screen, on every page. |
 | **MASTER** | Volume. |
 | **OCT− / OCT+** | Octave down and up. In save menus: back and confirm. |
@@ -93,7 +96,8 @@ across the stereo field.
 |---|---|
 | <img src="docs/manual/screens/holvut.png" alt="Holvut's SOUND page: the loop howling" width="320"> | <img src="docs/manual/screens/source.png" alt="The SOURCE page" width="320"> |
 
-**SOURCE:** KNOB 1 picks the source, KNOB 2 sets LATCH.
+**SOURCE** (always EDIT's last page): KNOB 1 picks the source, KNOB 2 **PRESET** loads the source's own sounds one by one
+(the factory's, then yours; its name on the screen; on a DRUM track: the models and their presets), KNOB 3 sets LATCH.
 
 | Source | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 | What it is |
 |---|---|---|---|---|---|
@@ -153,7 +157,7 @@ carriers (the ones you hear) outlined, modulators filled, the selected one lit.
 
 <img src="docs/manual/screens/drone.png" alt="DRONE: BORGA 100 %, the storm rising over 32 bars" width="360" align="right">
 
-**Press LFO twice.** DRONE makes a held sound move by itself, slowly, and never the same way twice. The knobs have
+**Hold FX, then turn SELECT to DRONE** (the track's own FX, 4/4). DRONE makes a held sound move by itself, slowly, and never the same way twice. The knobs have
 North Sami names.
 
 | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
@@ -227,7 +231,7 @@ North Sami names.
   the other. With FIELD on, what sounds together stays in one field, over all four tracks: the first note sounding sets it,
   and a note of the other field takes the next step. With nothing sounding, the next note may start in either. A latched
   note or a drone counts as sounding.
-- **BANK** (LFO's third page, a track's own): four narrow resonators in front of the track's filter and sends, tuned by what
+- **BANK** (hold FX, then SELECT: the track's own FX, 2/4): four narrow resonators in front of the track's filter and sends, tuned by what
   the track plays, at the TUNING's exact pitches. **MODE:** OFF, CHORD (the notes held; fewer than four: octaves up), HARM
   (harmonics 1, 2, 3, 5 of the lowest note), GHOST (CHORD a quarter tone up: at 24 EDO, the other field). **RING:** how
   narrow and how long. **MIX:** dry to bank alone. **WIND:** noise into the bank, so the track sings its pitches over
@@ -280,7 +284,7 @@ Each track has its own **64-step** pattern; all four play together on one tempo 
 
 <br clear="right">
 
-- **SELECT** moves the cursor; **hold SEQ + turn SELECT** sets the length. **PRESETS** sets the tempo.
+- **PRESETS** moves the cursor; **SELECT** goes through SEQ's pages; **hold SEQ + turn SELECT** sets the length. The tempo: on HOME.
 - **Stopped + REC:** each key fills a step and moves on. **Playing + REC:** notes land on the nearest step.
 - **Step locks:** hold **SEL** and turn a knob to lock that value to the step. **SEL + OCT−** clears them.
 - **Hold REC ~1 s:** clears the selected track's pattern (undoable).
@@ -320,19 +324,9 @@ Name them in the [editor](#14--the-editor-and-the-demo) (up to 10 characters).
 
 <br clear="right">
 
-### Songs: GLO
+### Mutes and solos: GLO
 
-<img src="docs/manual/screens/song.png" alt="GLO > SONG" width="300" align="right">
-
-**GLO** opens **SONG**: a chain of up to 16 steps, each a slot and its repeats.
-
-| KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
-|---|---|---|---|
-| SECTION | PATTERN (A–D / END) | REPEATS (1–16) | MODE |
-
-- **MODE:** OFF (PLAY loops the slot), SONG (once), SONG LOOP.
-- **Record a song:** on SONG press **REC**, then **PLAY**, and switch slots with SAVE + keys 1–4.
-- **Hold GLO + keys 1–4** mutes T1–T4, **keys 5–8** solos them.
+The SONG page is gone (Arctic Scream plays loops). **Hold GLO + keys 1–4** mutes T1–T4, **keys 5–8** solos them.
 
 <br clear="right">
 
@@ -371,20 +365,21 @@ colours the whole mix at the end. Each page has its own northern lights.
 
 ---
 
-## 10 · Perform: hold FX
+## 10 · The track's own FX: hold FX
 
-<img src="docs/manual/screens/perform.png" alt="PERFORM" width="360" align="right">
+**Tap FX** for the effects all tracks share (TAPE, GRAIN, DELAY, SPACE, MASTER, DRIVE: 1/6 .. 6/6). **Hold FX** for
+the selected track's own, in this order (SELECT goes through them):
 
-**Hold FX** for a moment and PERFORM appears. Each trick lasts while you hold its key; the sequencer keeps running,
-and you land back in time when you let go.
+| Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+|---|---|---|---|---|
+| DRIVE (1/4) | AMOUNT (0 = off) | TYPE: SOFT, FUZZ, CLIP, FOLD | TONE (OPEN at the top) | MIX |
+| BANK (2/4) | MODE | RING | MIX | WIND |
+| BANK 2 (3/4) | GLACIER | | | |
+| DRONE (4/4) | BORGA | STOARBMA | GOHCCAT | LATCH |
 
-| key 1 | key 2 | key 3 | key 4 |
-|---|---|---|---|
-| FREEZE | REV THROW | ECHO THROW | TAPE STOP |
-| **key 5** | **key 6** | **key 7** | **key 8** |
-| REVERSE | FILTER DOWN | FILTER UP | STUTTER |
-
-FREEZE is a toggle: tap it to hold the grain cloud, tap again to let go.
+The track's DRIVE comes first: the source, then DRIVE, then BANK (DRIVE gives BANK more to ring with), then the track's
+filter. It is saved with the project. The PERFORM tricks (FREEZE, the throws, TAPE STOP, REVERSE, the filter sweeps,
+STUTTER) are gone; with FX held, the white keys play notes as ever.
 
 <br clear="right">
 
@@ -405,7 +400,6 @@ A track can play by itself: random notes of the **SCALE** (with chord mode on: r
 - **OCTAVE** (−3 … +3) is the generator's own, separate from the keyboard's OCT: at 0 its notes start at C3. **RANGE** (1, 2 or 3 OCT) is how far up from there it may play: OCTAVE 0 with RANGE 2 plays C3–B4; OCTAVE −1 takes it down among the drones.
 - Every note stays in the SCALE and in the range. A chord's notes that would go past the range are folded back into it by whole octaves (they stay in the scale and the chord stays the same chord, voiced closer); two notes landing on the same pitch sound once.
 - The header shows what changed for a moment: `T1 GENERATE PULSE`, `T1 GENERATE OFF`, `T2 PULSE`, `T1 OCT -1`, `ALL RANGE 2 OCT`.
-- **The PERFORM screen** (FX held) shows a tile for each track under the tricks: lit while it generates, its MODE, its range (`C3-B4`), and a small square that flashes each time it plays a note.
 - While FX is held, the eight black keys glow and the keys of the tracks that generate are lit.
 - **The pattern:** while a track generates, its own pattern is not heard; it keeps running silently underneath, so when you switch GENERATE off it comes back in time, exactly as it was. GENERATE never writes into it.
 - It plays the track's own sound through its own voices, like your keys: it never takes another track's voices (a full track skips a note). Mute and solo (GLO) work on it as usual.
@@ -505,7 +499,6 @@ The seven Holvut sounds hold their notes (LATCH) and start with DRONE on.
 | Hold | + | Does |
 |---|---|---|
 | EDIT | OCT− / OCT+ | Undo / redo |
-| FX | white keys 1–8 | PERFORM: FREEZE … STUTTER |
 | FX | black keys | GENERATE: T1–T4 on / off, MODE, OCTAVE, RANGE |
 | SEL | (alone, let go) | Chord mode on / off |
 | SEL | a knob (sequencer pages) | Lock that value to the step |
@@ -518,6 +511,7 @@ The seven Holvut sounds hold their notes (LATCH) and start with DRONE on.
 | ARP | (alone) | Arpeggiator on / off |
 | REC | (alone, ~1 s) | Clear the track's pattern |
 | HOME | (alone) | SYSTEM |
+| FX | (alone) | The track's own FX: DRIVE, BANK, BANK 2, DRONE |
 | — | OCT− + OCT+ | Reset CPU PEAK and USB REC DROPS |
 
 ---

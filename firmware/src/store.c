@@ -47,7 +47,7 @@
 #define LOCK_PK 288u                            /* a track's step locks: 64 x the four values, 64 x 4 bits which */
 #define SLOT_LEN(tn, sq, lk) (4u + NT * ((tn) + (sq) + (lk)))   /* a slot: [0] used, its tracks, sequences, locks */
 #define SONG_PK 20u                             /* the song: its chain (16), MODE, the mutes and solos, TUNING (its steps; 0: 12), a TUNING's own scale + 1 | FIELD << 7 */
-#define FX2_PK 76u                              /* (V2, version 8) MASTER's four, DRIVE's four; (version 9) BANK: five a track; (10) DRUM: twelve */
+#define FX2_PK 92u                              /* (V2, version 8) MASTER's four, DRIVE's four; (version 9) BANK: five a track; (10) DRUM: twelve; (11) the track's DRIVE: four a track */
 #define WORK_LEN(tn, sg, sq, lk, fm, fx) (NT * ((tn) + (sq) + (lk)) + 16u + 4u + (sg) + (fm) + (fx))   /* the working
                                                  * project: tracks, effects, tempo, slot, .., sequences, locks, the
                                                  * song, the FM patches, MASTER and DRIVE (an older version's sizes: sg
@@ -59,10 +59,10 @@
 #define OBJ_HDR 12u                             /* magic, the save count, type, version, length */
 #define OBJ_MAGIC 0x4B504441u                   /* "ADPK" (Arctic Scream p0larpatch's own: its tracks are longer than GR!MM's,
                                                  * so neither reads the other's saves; GR!MM's was "GRMK") */
-#define OBJ_VER 10u
+#define OBJ_VER 11u
 #define SLS_VER 6u                              /* the slots' stream (its layout as version 6's) */
-#define NOBJV 9u
-static const uint16_t OBJ_VERS[NOBJV][7] = {{10, TRK_PK, 20, 260, 288, FM_ALL, FX2_PK}, {9, TRK_PK, 20, 260, 288, FM_ALL, 28}, {8, TRK_PK, 20, 260, 288, FM_ALL, 8}, {7, TRK_PK, 20, 260, 288, FM_ALL, 0},
+#define NOBJV 10u
+static const uint16_t OBJ_VERS[NOBJV][7] = {{11, TRK_PK, 20, 260, 288, FM_ALL, FX2_PK}, {10, TRK_PK, 20, 260, 288, FM_ALL, 76}, {9, TRK_PK, 20, 260, 288, FM_ALL, 28}, {8, TRK_PK, 20, 260, 288, FM_ALL, 8}, {7, TRK_PK, 20, 260, 288, FM_ALL, 0},
                                             {6, 52, 20, 260, 288, 0, 0}, {5, 52, 20, 196, 0, 0, 0},
                                             {4, 52, 0, 196, 0, 0, 0}, {3, 48, 0, 196, 0, 0, 0},
                                             {2, 44, 0, 196, 0, 0, 0}};   /* the versions loaded, newest first: a
@@ -579,6 +579,9 @@ static void pk_work(uint8_t *q)
         q[0] = (uint8_t)(0x80u | (uint32_t)clamp(trk[t].p[ENG_DRUM][0], 0, NDENT - 1));   /* (MODEL's entry; 1.4.0's: 0 MEMBRANE, 1 HAIL) */
         for (k = 0; k < DM_DEEP; k++) q[4u + k] = (uint8_t)clamp(dm_v[t][k], 0, 127);
     }
+    for (t = 0; t < NT; t++, q += 4)            /* (11) the track's DRIVE */
+        q[0] = (uint8_t)clamp(td_amt[t], 0, 127), q[1] = (uint8_t)clamp(td_type[t], 0, NDTYPE - 1),
+        q[2] = (uint8_t)clamp(td_tone[t], 0, 127), q[3] = (uint8_t)clamp(td_mix[t], 0, 127);
 }
 enum { UW_GLOBALS = 1, UW_CHAIN = 2 };
 static void uk_work(const uint8_t *q, uint32_t f, const uint16_t *vs)   /* (f: UW_GLOBALS, the effects, tempo, slot,
@@ -619,6 +622,11 @@ static void uk_work(const uint8_t *q, uint32_t f, const uint16_t *vs)   /* (f: U
                 for (k = 1; k < 4u; k++) trk[t].p[ENG_DRUM][k] = clamp(y[k], 0, 127);
                 for (k = 0; k < DM_DEEP; k++) dm_v[t][k] = clamp(y[4u + k], 0, 127);
             }
+        }
+        for (t = 0; t < NT; t++) {              /* (11; before it: off) */
+            const uint8_t *y = fx >= 92u ? x + 76u + t * 4u : 0;
+            td_amt[t] = y ? clamp(y[0], 0, 127) : 0, td_type[t] = y ? clamp(y[1], 0, NDTYPE - 1) : 0;
+            td_tone[t] = y ? clamp(y[2], 0, 127) : 127, td_mix[t] = y ? clamp(y[3], 0, 127) : 127;
         }
     }
     if (globals && !sg) sc_tuning = TN_12, sc_field = 0;
@@ -868,6 +876,7 @@ static void project_new(void)                   /* NEW: the four tracks' power-o
         for (e = 0; e < NENG; e++)
             for (k = 0; k < 4u; k++) trk[t].p[e][k] = T0.p[e][k];
         dm_init(t);
+        td_amt[t] = 0, td_type[t] = 0, td_tone[t] = td_mix[t] = 127;   /* (the track's DRIVE: off) */
         for (k = 0; k < 4u; k++) trk[t].env[k] = T0.env[k];
         if (trk[t].latch) nq_put(NQ_RELEASE, t, 0);
         trk[t].latch = T0.latch;

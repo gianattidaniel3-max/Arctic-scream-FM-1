@@ -299,6 +299,7 @@ static void mix_tracks(int32_t *out, uint32_t used, uint32_t n)   /* the soundin
             }
             dm_run(t, x, n);
         }
+        if ((used >> t & 1u) && td_on(t)) td_run(t, x, n);   /* (the track's own DRIVE: before BANK, which it feeds) */
         if (bk_wanted(t, used)) {               /* (BANK: its ring and its WIND keep a track sounding) */
             if (!(used >> t & 1u)) {
                 for (k = 0; k < n; k++) x[k] = 0;
@@ -1014,7 +1015,7 @@ static char *put_ms(char *s, uint32_t q16)      /* a time, ms in Q16: "5 ms", "1
  * tap opens its first page, again the next (round); SYSTEM is HOME's, held */
 enum { PG_SOUND, PG_SOURCE, PG_ENV, PG_LFO, PG_SCALE, PG_CHORD, PG_SONG, PG_HOME, PG_MIX1, PG_MIX2, PG_SYSTEM,
        PG_SYS2, PG_SOUNDS, PG_PROJECTS, PG_ARP, PG_GRID, PG_PATTERN, PG_TAPE, PG_GRAIN, PG_DELAY, PG_SPACE, PG_PERFORM,
-       PG_TRACK, PG_FMALGO, PG_FMOP, PG_DRONE, PG_MASTER, PG_DRIVE, PG_SYS3, PG_BANK, PG_BANK2, PG_DRUM1, PG_DRUM2, NPAGE };   /* (the newer last: MIDI LEARN's links keep the pages' numbers they
+       PG_TRACK, PG_FMALGO, PG_FMOP, PG_DRONE, PG_MASTER, PG_DRIVE, PG_SYS3, PG_BANK, PG_BANK2, PG_DRUM1, PG_DRUM2, PG_TDRIVE, NPAGE };   /* (the newer last: MIDI LEARN's links keep the pages' numbers they
                                                  * have; in their button's round by pg_key. TRACK: gone in step 25, its
                                                  * number kept: sys_load moves its links onto HOME) */
 typedef struct {
@@ -1025,19 +1026,19 @@ typedef struct {
 } page_t;
 static const page_t PAGES[NPAGE] = {
     {"SOUND", BTN_EDIT, 1, 1, 1, {"", "", "", ""}},   /* (the source's names) */
-    {"SOURCE", BTN_EDIT, 1, 1, 1, {"SOURCE", "LATCH", "", ""}},
+    {"SOURCE", BTN_EDIT, 1, 1, 1, {"SOURCE", "PRESET", "LATCH", ""}},   /* (EDIT's last; PRESET: its sounds) */
     {"ENV", BTN_ENV, 1, 1, 1, {"ATTACK", "DECAY", "SUSTAIN", "RELEASE"}},
     {"LFO", BTN_LFO, 1, 1, 1, {"RATE", "DEPTH", "DESTINATION", "SHAPE"}},
     {"SCALE", BTN_SEL, 1, 0, 1, {"ROOT", "SCALE", "TUNING", "FIELD"}},
     {"CHORD", BTN_SEL, 1, 0, 1, {"CHORD TYPE", "VOICING", "", ""}},
-    {"SONG", BTN_GLO, 1, 0, 1, {"SECTION", "PATTERN", "REPEATS", "MODE"}},
+    {"SONG", BTN_GLO, 1, 0, 0, {"SECTION", "PATTERN", "REPEATS", "MODE"}},   /* (gone from GLO: loops, not songs) */
     {"HOME", BTN_HOME, 1, 1, 1, {"VOLUME", "CUTOFF", "WARP", "MORPH"}},   /* (the track's: its LEVEL, its filter,
                                                  * WARP and MORPH (chaos.c); its sound's name in the header) */
     {"MIXER 1", BTN_HOME, 1, 1, 1, {"LEVEL", "DLY SEND", "REV SEND", "GRAIN SEND"}},
     {"MIXER 2", BTN_HOME, 1, 1, 1, {"PAN", "TYPE", "POS", "RESONANCE"}},   /* (V2: the track filter's TYPE and POS;
                                                  * its RESONANCE, HOME's before 1.3) */
-    {"SYSTEM", BTN_HOME, 1, 0, 0, {"COLOUR", "MIDI CHANNEL", "TUNE", "SCREEN OFF"}},   /* (HOME held; HOME again: */
-    {"SYSTEM 2", BTN_HOME, 1, 0, 0, {"MIDI LEARN", "SEQ MIDI OUT", "SAMPLES", "CLOCK"}},       /* SYSTEM 2, SYSTEM 3, and
+    {"SYSTEM", BTN_HOME, 1, 0, 1, {"COLOUR", "MIDI CHANNEL", "TUNE", "SCREEN OFF"}},   /* (HOME held; HOME again: */
+    {"SYSTEM 2", BTN_HOME, 1, 0, 1, {"MIDI LEARN", "SEQ MIDI OUT", "SAMPLES", "CLOCK"}},       /* SYSTEM 2, SYSTEM 3, and
                                                  * back) */
     {"SOUNDS", BTN_SAVE, 1, 0, 1, {"SLOT", "CATEGORY", "TYPE", "ACTION"}},
     {"PROJECTS", BTN_SAVE, 1, 0, 1, {"SLOT", "CATEGORY", "TYPE", "ACTION"}},
@@ -1048,25 +1049,39 @@ static const page_t PAGES[NPAGE] = {
     {"GRAIN", BTN_FX, 1, 0, 1, {"SIZE", "DENSITY", "SCATTER", "MIX"}},
     {"DELAY", BTN_FX, 1, 0, 1, {"TIME", "FEEDBACK", "WEAR", "MIX"}},
     {"SPACE", BTN_FX, 1, 0, 1, {"SIZE", "DAMP", "MIX", "PRE-DELAY"}},
-    {"PERFORM", BTN_FX, 1, 0, 0, {"FILT", "REV", "ECHO", "PITCH"}},   /* (FX held ~0.3 s: the tricks; its slabs show
+    {"PERFORM", BTN_FX, 0, 0, 0, {"FILT", "REV", "ECHO", "PITCH"}},   /* (FX held ~0.3 s: the tricks; its slabs show
                                                  * them, its knobs do nothing) */
     {"TRACK", BTN_HOME, 0, 1, 0, {"", "", "", ""}},   /* (gone: its knobs on HOME) */
     {"FM ALGO", BTN_EDIT, 1, 1, 1, {"ALGO", "FEEDBACK", "OP", "FINE"}},   /* (an FM track's: its own patch, fm.c) */
     {"FM OP", BTN_EDIT, 1, 1, 1, {"RATIO", "LEVEL", "ATTACK", "DECAY"}},  /* (the operator OP selects) */
-    {"DRONE", BTN_LFO, 1, 1, 1, {"BORGA", "STOARBMA", "GOHCCAT", "LATCH"}},   /* (Arctic Scream p0larpatch: LFO's
+    {"DRONE", BTN_FX, 1, 1, 1, {"BORGA", "STOARBMA", "GOHCCAT", "LATCH"}},   /* (Arctic Scream p0larpatch: LFO's
                                                  * second; the walks, the tension, its time (drone.c); LATCH as
                                                  * SOURCE's) */
     {"MASTER", BTN_FX, 1, 0, 1, {"CUTOFF", "RESONANCE", "TYPE", "POSITION"}},   /* (GR!MM V2: FX's 5th and 6th, master.c) */
     {"DRIVE", BTN_FX, 1, 0, 1, {"AMOUNT", "TYPE", "TONE", "MIX"}},
-    {"SYSTEM 3", BTN_HOME, 1, 0, 0, {"LATCH", "CC MAP", "", ""}},   /* (V2: a NEW project's tracks' LATCH) */
-    {"BANK", BTN_LFO, 1, 1, 1, {"MODE", "RING", "MIX", "WIND"}},   /* (LFO's third and fourth: bank.c) */
-    {"BANK 2", BTN_LFO, 1, 1, 1, {"GLACIER", "", "", ""}},
+    {"SYSTEM 3", BTN_HOME, 1, 0, 1, {"LATCH", "CC MAP", "", ""}},   /* (V2: a NEW project's tracks' LATCH) */
+    {"BANK", BTN_FX, 1, 1, 1, {"MODE", "RING", "MIX", "WIND"}},   /* (FX held: the track's own FX; bank.c) */
+    {"BANK 2", BTN_FX, 1, 1, 1, {"GLACIER", "", "", ""}},
     {"DRUM 1", BTN_EDIT, 1, 1, 1, {"", "", "", ""}},   /* (a DRUM track's only: pg_on; its MODEL's names: knob_name) */
     {"DRUM 2", BTN_EDIT, 1, 1, 1, {"", "KEYS", "WANDER", "HUMAN"}},
+    {"DRIVE", BTN_FX, 1, 1, 1, {"AMOUNT", "TYPE", "TONE", "MIX"}},   /* (FX held: the track's own DRIVE, before BANK) */
 };
+/* the pages in their buttons' rounds, in order; a button's second round (pg_grp 1) is its hold's: HOME's SYSTEM, FX's
+ * the track's own FX. EDIT: the source's pages, SOURCE last */
+static const uint8_t PG_ORDER[NPAGE] = {PG_SOUND, PG_FMALGO, PG_FMOP, PG_DRUM1, PG_DRUM2, PG_SOURCE, PG_ENV, PG_LFO,
+                                        PG_SCALE, PG_CHORD, PG_HOME, PG_MIX1, PG_MIX2, PG_SYSTEM, PG_SYS2, PG_SYS3,
+                                        PG_SOUNDS, PG_PROJECTS, PG_ARP, PG_GRID, PG_PATTERN, PG_TAPE, PG_GRAIN, PG_DELAY,
+                                        PG_SPACE, PG_MASTER, PG_DRIVE, PG_TDRIVE, PG_BANK, PG_BANK2, PG_DRONE, PG_SONG,
+                                        PG_PERFORM, PG_TRACK};
 static uint32_t pg_key(uint32_t p)              /* its place in its button's round */
 {
-    return p == PG_FMALGO ? PG_SOUND * 4u + 1u : p == PG_FMOP ? PG_SOUND * 4u + 2u : p * 4u;
+    uint32_t i;
+    for (i = 0; i < NPAGE && PG_ORDER[i] != p; i++) ;
+    return i;
+}
+static uint32_t pg_grp(uint32_t p)              /* 1: its button's held round (SYSTEM; the track's FX) */
+{
+    return p == PG_SYSTEM || p == PG_SYS2 || p == PG_SYS3 || p == PG_TDRIVE || p == PG_BANK || p == PG_BANK2 || p == PG_DRONE;
 }
 static int pg_on(uint32_t p)                    /* in its button's round now (FM ALGO, FM OP: an FM track's only) */
 {
@@ -1084,15 +1099,37 @@ static uint32_t page = PG_HOME;
 
 static uint32_t next_page(uint32_t b)           /* button b tapped: its first page, or (on one of its) the next */
 {
-    uint32_t p, first = NPAGE, nx = NPAGE, on = PAGES[page].btn == b && pg_on(page);
-    if (b == BTN_HOME && (page == PG_SYSTEM || page == PG_SYS2 || page == PG_SYS3))
-        return page == PG_SYSTEM ? PG_SYS2 : page == PG_SYS2 ? PG_SYS3 : PG_SYSTEM;
+    uint32_t p, first = NPAGE, nx = NPAGE, on = PAGES[page].btn == b && pg_on(page), g;
+    g = on && b != BTN_FX ? pg_grp(page) : 0u;  /* (HOME on SYSTEM: SYSTEM's round; FX tapped: always the buses) */
+    on = on && pg_grp(page) == g;
     for (p = 0; p < NPAGE; p++) {
-        if (PAGES[p].btn != b || !pg_on(p)) continue;
+        if (PAGES[p].btn != b || !pg_on(p) || pg_grp(p) != g) continue;
         if (first == NPAGE || pg_key(p) < pg_key(first)) first = p;
         if (on && pg_key(p) > pg_key(page) && (nx == NPAGE || pg_key(p) < pg_key(nx))) nx = p;
     }
-    return nx != NPAGE ? nx : first;
+    return nx != NPAGE ? nx : first != NPAGE ? first : page;   /* (no pages: GLO) */
+}
+static uint32_t hold_page(uint32_t b)           /* button b held: its held round's first page */
+{
+    uint32_t p, first = NPAGE;
+    for (p = 0; p < NPAGE; p++)
+        if (PAGES[p].btn == b && pg_on(p) && pg_grp(p) == 1u && (first == NPAGE || pg_key(p) < pg_key(first))) first = p;
+    return first != NPAGE ? first : page;
+}
+static uint32_t pg_step(int32_t d)              /* SELECT: d pages on in the page's round (its ends: there) */
+{
+    uint32_t p, b = PAGES[page].btn, g = pg_grp(page), cur = page;
+    for (; d; d += d > 0 ? -1 : 1) {
+        uint32_t best = NPAGE;
+        for (p = 0; p < NPAGE; p++) {
+            if (PAGES[p].btn != b || !pg_on(p) || pg_grp(p) != g) continue;
+            if (d > 0 ? pg_key(p) > pg_key(cur) && (best == NPAGE || pg_key(p) < pg_key(best))
+                      : pg_key(p) < pg_key(cur) && (best == NPAGE || pg_key(p) > pg_key(best))) best = p;
+        }
+        if (best == NPAGE) break;
+        cur = best;
+    }
+    return cur;
 }
 
 static uint32_t sel_eng(void) { return (uint32_t)clamp(trk[sel].eng, 0, NENG - 1); }
@@ -1109,6 +1146,20 @@ static void grid_put(void)                      /* grid_v into the step (main lo
     st->note = (uint8_t)clamp(grid_v[0], 0, 127), st->chance = (uint8_t)clamp(grid_v[1], 0, 100);
     st->ratchet = (uint8_t)clamp(grid_v[2], 1, 4), st->len = (uint8_t)clamp(grid_v[3], 1, SEQ_N);
 }
+static volatile int32_t src_pre[NT] = {-1, -1, -1, -1};   /* SOURCE's PRESET: the source's sound loaded (its place in
+                                                 * src_item's list; -1: none since the source changed) */
+static const uint8_t *src_item(uint32_t e, uint32_t k)   /* source e's k-th sound: the factory's, then the user's */
+{
+    uint32_t i, n = 0;
+    for (i = 0; i < SND_NFACT; i++)
+        if (SND_FACTORY[i][3] == e && n++ == k) return SND_FACTORY[i];
+    for (i = 0; i < SND_N; i++) {
+        const uint8_t *r = snd_rec(i);
+        if (r && r[3] == e && n++ == k) return r;
+    }
+    return 0;
+}
+static uint32_t src_len(uint32_t e) { uint32_t n = 0; while (src_item(e, n)) n++; return n; }
 static volatile int32_t *knob_param(uint32_t pg, uint32_t k)   /* what KNOB k + 1 turns on page pg (0: nothing) */
 {
     static volatile int32_t *const FX[4][4] = {{&tf_wow, &tf_sat, &tf_tone, &tf_hiss},
@@ -1118,7 +1169,8 @@ static volatile int32_t *knob_param(uint32_t pg, uint32_t k)   /* what KNOB k + 
     volatile int32_t *const MIX[4] = {&trk[sel].level, &trk[sel].dly, &trk[sel].rev, &trk[sel].grn};
     switch (pg) {
     case PG_SOUND: return &trk[sel].p[sel_eng()][k];
-    case PG_SOURCE: return k == 0u ? &trk[sel].eng : k == 1u ? &trk[sel].latch : 0;
+    case PG_SOURCE: return k == 0u ? &trk[sel].eng : k == 1u ? (sel_eng() == ENG_DRUM ? &trk[sel].p[ENG_DRUM][0] : &src_pre[sel]) :
+                           k == 2u ? &trk[sel].latch : 0;
     case PG_ENV: return &trk[sel].env[k];
     case PG_SONG: return k == 0u ? &song_sect : k == 1u ? &song_pat[clamp(song_sect, 0, SONG_N - 1)] :
                          k == 2u ? &song_rep[clamp(song_sect, 0, SONG_N - 1)] : &song_mode;
@@ -1143,6 +1195,7 @@ static volatile int32_t *knob_param(uint32_t pg, uint32_t k)   /* what KNOB k + 
     case PG_TAPE: case PG_GRAIN: case PG_DELAY: case PG_SPACE: return FX[pg - PG_TAPE][k];
     case PG_MASTER: return k == 0u ? &mf_cut : k == 1u ? &mf_res : k == 2u ? &mf_type : &mf_pos;
     case PG_DRIVE: return k == 0u ? &dr_amt : k == 1u ? &dr_type : k == 2u ? &dr_tone : &dr_mix;
+    case PG_TDRIVE: return k == 0u ? &td_amt[sel] : k == 1u ? &td_type[sel] : k == 2u ? &td_tone[sel] : &td_mix[sel];
     case PG_GRID: {                             /* the selected step of the track's pattern (its copy: grid_put) */
         seq_step_t *st = grid_step();
         grid_v[0] = st->note, grid_v[1] = st->chance, grid_v[2] = st->ratchet, grid_v[3] = st->len;
@@ -1168,6 +1221,7 @@ static const char *knob_name(uint32_t pg, uint32_t k)
 static int32_t knob_max(uint32_t pg, uint32_t k)
 {
     static const int32_t GRID_MAX[4] = {127, 100, 4, SEQ_N}, PATT_MAX[4] = {SEQ_N, 7, 127, SEQ_NMODE - 1};
+    if (pg == PG_SOURCE && k == 1u) return sel_eng() == ENG_DRUM ? NDENT - 1 : (int32_t)src_len(sel_eng()) - 1;
     return pg == PG_SOUND ? sel_engine()->max[k] : pg == PG_SOURCE ? (k ? 1 : (int32_t)NENG - 1) :
            pg == PG_GRID ? GRID_MAX[k] : pg == PG_PATTERN ? PATT_MAX[k] :
            pg == PG_SOUNDS ? (k == 0u ? SND_N - 1 : k == 1u ? NCAT - 1 : k == 2u ? (int32_t)NENG : 2) :
@@ -1183,7 +1237,7 @@ static int32_t knob_max(uint32_t pg, uint32_t k)
            pg == PG_FMALGO ? (k == 0u ? 31 : k == 1u ? 7 : k == 2u ? 5 : 99) :
            pg == PG_FMOP ? (k ? 99 : 31) : pg == PG_MIX2 ? (k == 1u ? NFTYPE - 1 : k == 2u ? 1 : 127) :
            pg == PG_MASTER ? (k == 2u ? NFTYPE - 1 : k == 3u ? NMPOS - 1 : 127) :
-           pg == PG_DRIVE && k == 1u ? NDTYPE - 1 : 127;
+           (pg == PG_DRIVE || pg == PG_TDRIVE) && k == 1u ? NDTYPE - 1 : 127;
 }
 static int32_t knob_min(uint32_t pg, uint32_t k)   /* (RATCHET, LENGTH, STEPS, OCTAVES: from 1; GATE from 10 %) */
 {
@@ -1191,6 +1245,12 @@ static int32_t knob_min(uint32_t pg, uint32_t k)   /* (RATCHET, LENGTH, STEPS, O
     if (pg == PG_SONG && k == 2u) return 1;     /* (REPEATS from 1) */
     if (pg == PG_SYSTEM && k == 2u) return -50; /* (TUNE: -50 .. +50 cents) */
     return (pg == PG_GRID && k >= 2u) || (pg == PG_PATTERN && k == 0u);
+}
+static char *src_pre_name(char *s, int32_t v)  /* SOURCE's PRESET: the sound's name ("-": none loaded) */
+{
+    if (sel_eng() == ENG_DRUM) return put_s(s, DM_ENAME[clamp(v, 0, NDENT - 1)]);
+    if (v < 0 || !src_item(sel_eng(), (uint32_t)v)) return put_s(s, "-");
+    return snd_rec_name(src_item(sel_eng(), (uint32_t)v), s);
 }
 static char *lfo_rate_text(char *s, int32_t v, const char *sp)   /* RATE: "20 S", "2.5 S" a cycle; "4.0 HZ" (sp: " ",
                                                  * or "" on a slab) */
@@ -1250,7 +1310,8 @@ static void knob_text(uint32_t pg, uint32_t k, char *s)   /* knob k's value on p
     case PG_SOUND: sel_engine()->text(trk[sel].p[sel_eng()], k, s); return;
     case PG_SOURCE:
         if (k == 0u) put_s(s, sel_engine()->name);
-        else if (k == 1u) put_s(s, v ? "ON" : "OFF");
+        else if (k == 1u) src_pre_name(s, v);
+        else if (k == 2u) put_s(s, v ? "ON" : "OFF");
         return;
     case PG_ENV:                                /* (as env_coef: ms, Q16) */
         v = clamp(v, 0, 127);
@@ -1312,7 +1373,7 @@ static void knob_text(uint32_t pg, uint32_t k, char *s)   /* knob k's value on p
         else if (k == 3u) put_s(s, MP_NAME[clamp(v, 0, NMPOS - 1)]);
         else put_pc(s, v);
         return;
-    case PG_DRIVE:
+    case PG_DRIVE: case PG_TDRIVE:
         if (k == 1u) put_s(s, DT_NAME[clamp(v, 0, NDTYPE - 1)]);
         else if (k == 2u && v >= 127) put_s(s, "OPEN");
         else put_pc(s, v);
@@ -1535,6 +1596,7 @@ static void set_source(int32_t e)               /* the selected track's source: 
         return;
     if (e == ENG_DRUM) set_latch(0);            /* (a hit, not a held note) */
     trk[sel].eng = e;
+    src_pre[sel] = -1;                          /* (its PRESET: none loaded yet) */
     nq_put(NQ_RESTART, sel, 0);
 }
 static void set_latch(int32_t on)               /* the selected track's LATCH; ON -> OFF releases its latched notes */
@@ -1582,11 +1644,20 @@ static void knob_step(uint32_t pg, uint32_t k, int32_t d)   /* KNOB k + 1 on pag
     if (pg == PG_SOURCE && k == 0u) undo_take(UK_SRC | sel, -1);                       /* a source change, */
     if (pg == PG_SOUND && k == 0u && sel_eng() == ENG_FM) undo_take(UK_SND | sel, -1);   /* FM's PATCH: its edits) */
     if (pg == PG_SOURCE && k == 0u) set_source(*p + d);
-    else if ((pg == PG_SOURCE && k == 1u) || (pg == PG_DRONE && k == 3u)) set_latch(*p + d);
+    else if ((pg == PG_SOURCE && k == 2u) || (pg == PG_DRONE && k == 3u)) set_latch(*p + d);
+    else if (pg == PG_SOURCE && k == 1u && sel_eng() != ENG_DRUM) {   /* PRESET: the source's next sound, loaded */
+        const uint8_t *r;
+        int32_t i = clamp(*p + d, 0, hi);
+        if (hi < 0 || !(r = src_item(sel_eng(), (uint32_t)i))) { hd_say("NO PRESETS"); return; }
+        undo_take(UK_SND | sel, -1);
+        snd_apply(r, sel);
+        *p = i, trk_nm[sel][0] = 0;
+        { char m[24]; snd_rec_name(r, m); hd_say(m); }
+    }
     else if (pg == PG_GRID && k == 0u && sc_now() > 0) *p = sc_walk(*p, d);   /* (a SCALE: its notes only) */
     else if (pg == PG_GRID && k == 0u && !*p && d > 0) *p = 60;   /* NOTE from OFF: C4, then on from there */
     else *p = clamp(*p + d, lo, hi);
-    if (pg == PG_SOUND && k == 0u && sel_eng() == ENG_DRUM && *p != old) dm_def(sel, (uint32_t)*p);   /* (a new MODEL: its sound) */
+    if ((pg == PG_SOUND || pg == PG_SOURCE) && k == (pg == PG_SOURCE) && sel_eng() == ENG_DRUM && *p != old) dm_def(sel, (uint32_t)*p);   /* (a new MODEL: its sound) */
     if (pg == PG_BANK && k == 0u && *p && !trk[sel].bk_ring && !trk[sel].bk_mix)   /* (first on: it sounds at once) */
         trk[sel].bk_ring = 70, trk[sel].bk_mix = 90;
     if (pg == PG_GRID) grid_put();              /* (the step: its bytes) */
@@ -1950,7 +2021,7 @@ static void batt_poll(void)
 static void app_main(void)
 {
     uint32_t prev = 0, k, b_down = 0, b_used = 0, t_down[14] = {0}, rec = 0,
-             back_page = PG_HOME, pf_keys = 0, pf_back = PG_HOME, t_touch = 0, as_last = 0, as_next = 0, learn_was = 0,
+             back_page = PG_HOME, pf_keys = 0, t_touch = 0, as_last = 0, as_next = 0, learn_was = 0,
              fac_was = 0;
     static const uint8_t WK[8] = {0, 2, 4, 6, 7, 9, 11, 12};   /* the white keys from F3: 1..4 recall A..D, 5..8 save them */
     int8_t oct_before = 0;                      /* the octave before the last OCT press (undone if it was a reset) */
@@ -2011,8 +2082,8 @@ static void app_main(void)
         if (fm1_in.notes != prev || fm1_in.buttons) t_touch = t_hand = fm1_ms;   /* (the autosave waits for the hands
                                                  * to rest; SCREEN OFF counts from their last touch) */
 
-        if ((d = enc_take(ENC_ALGORITHM)) != 0) {   /* ALGORITHM: the track */
-            sel = (uint32_t)clamp((int32_t)sel + d, 0, NT - 1);
+        if ((d = enc_take(ENC_ALGORITHM)) != 0) {   /* ALGORITHM: the track, on HOME's pages (HOME, MIXER 1, 2) */
+            if (PAGES[page].btn == BTN_HOME && !pg_grp(page)) sel = (uint32_t)clamp((int32_t)sel + d, 0, NT - 1);
             t_touch = fm1_ms;
         }
         if ((d = enc_take(ENC_SELECT)) != 0) {   /* SELECT: SEQ held, the track's STEPS; on SEQ's pages the cursor
@@ -2022,17 +2093,16 @@ static void app_main(void)
                 undo_take(UK_LEN | sel, -1);
                 seq[sel].steps = clamp(seq[sel].steps + enc_accel(ENC_SELECT, d, SEQ_N - 1), 1, SEQ_N);
                 b_used |= 1u << BTN_SEQ;        /* (let go: no page change) */
-            } else if (PAGES[page].btn == BTN_SEQ)
-                seq[sel].cursor = clamp(seq[sel].cursor + enc_accel(ENC_SELECT, d, SEQ_N - 1), 0, SEQ_N - 1);
-            else if (page == PG_HOME && !ck_ext)   /* (a MIDI clock's tempo: not ours to turn) */
-                seq_bpm = clamp(seq_bpm + enc_accel(ENC_SELECT, d, 280), 20, 300);
+            } else if (page == PG_HOME) {       /* HOME: the tempo (a MIDI clock's: not ours to turn) */
+                if (!ck_ext) seq_bpm = clamp(seq_bpm + enc_accel(ENC_SELECT, d, 280), 20, 300);
+            } else page = pg_step(d);           /* elsewhere: the button's pages */
         }
-        if ((d = enc_take(ENC_PRESETS)) != 0) {   /* PRESETS: on SEQ's pages the tempo; elsewhere the saved sounds */
+        if ((d = enc_take(ENC_PRESETS)) != 0) {   /* PRESETS: on HOME's pages the saved sounds; on SEQ's the cursor
+                                                 * (the step); elsewhere nothing */
             t_touch = fm1_ms;
-            if (PAGES[page].btn == BTN_SEQ) {
-                if (!ck_ext) seq_bpm = clamp(seq_bpm + enc_accel(ENC_PRESETS, d, 280), 20, 300);
-            }
-            else
+            if (PAGES[page].btn == BTN_SEQ)
+                seq[sel].cursor = clamp(seq[sel].cursor + enc_accel(ENC_PRESETS, d, SEQ_N - 1), 0, SEQ_N - 1);
+            else if (PAGES[page].btn == BTN_HOME && !pg_grp(page))
                 presets_turn(d);
         }
 
@@ -2133,7 +2203,7 @@ static void app_main(void)
         rec_on = rec;
         glo_held = b_down >> BTN_GLO & 1u;      /* GLO held: mutes, solos on the keys */
         if ((b_down >> BTN_HOME & 1u) && !(b_used >> BTN_HOME & 1u) && fm1_ms - t_down[BTN_HOME] >= HOLD_MS) {
-            page = PG_SYSTEM;                   /* HOME held: SYSTEM */
+            page = hold_page(BTN_HOME);         /* HOME held: SYSTEM */
             b_used |= 1u << BTN_HOME;
         }
         if ((rel >> BTN_SEL & 1u) && (b_down >> BTN_SEL & 1u) && !(b_used >> BTN_SEL & 1u) &&
@@ -2151,9 +2221,8 @@ static void app_main(void)
         }
         arp_rec = rec && playing ? (int32_t)sel : -1;   /* (REC, playing: the arp's notes recorded) */
         save_held = b_down >> BTN_SAVE & 1u;    /* SAVE held: its layer on the keys (slots A..D), their state shown */
-        if ((b_down >> BTN_FX & 1u) && page != PG_PERFORM && fm1_ms - t_down[BTN_FX] >= 300u) {
-            pf_back = page;                     /* FX held ~0.3 s: PERFORM (let go: back, no page change) */
-            page = PG_PERFORM;
+        if ((b_down >> BTN_FX & 1u) && !(b_used >> BTN_FX & 1u) && fm1_ms - t_down[BTN_FX] >= 300u) {
+            page = hold_page(BTN_FX);           /* FX held: the track's own FX (DRIVE, BANK, DRONE); tapped: the buses */
             b_used |= 1u << BTN_FX;
         }
 
@@ -2216,26 +2285,10 @@ static void app_main(void)
                 b_used |= 1u << BTN_SAVE;
                 continue;
             }
-            if ((b_down >> BTN_FX & 1u) && k != 0u) {   /* FX held + G3 .. F4: a trick, while its key is held */
-                uint32_t w;
-                for (w = 1; w < 8u && WK[w] != k; w++)
-                    ;
-                if (w < 8u) {
-                    pf_keys |= 1u << k;
-                    pf_held |= 1u << (w - 1u);
-                    b_used |= 1u << BTN_FX;
-                    continue;
-                }
-            }
             if ((b_down >> BTN_FX & 1u) && gen_bk(k) >= 0) {   /* (V2) FX held + GENERATE's keys (gen_key) */
                 int32_t w = gen_bk(k);
                 if (w < 4) gen_kd |= (uint8_t)(1u << w), gen_ku &= (uint8_t)~(1u << w);
                 else gen_key((uint32_t)w);
-                b_used |= 1u << BTN_FX;
-                continue;
-            }
-            if ((b_down >> BTN_FX & 1u) && k == 0u) {   /* FX held + F3: FREEZE */
-                ge_freeze ^= 1u;
                 b_used |= 1u << BTN_FX;
                 continue;
             }
@@ -2262,7 +2315,6 @@ static void app_main(void)
                     if (k == BTN_SAVE && PAGES[page].btn != BTN_SAVE) back_page = page;   /* (OCT- comes back here) */
                     page = next_page(k);
                 }
-                if (k == BTN_FX && page == PG_PERFORM) page = pf_back;   /* (PERFORM: back where it was) */
                 b_down &= ~(1u << k);
             }
 
@@ -2380,7 +2432,6 @@ static void app_main(void)
             for (lit = 0, k = 0; k < 4u; k++) lit |= (uint32_t)slot_used(k) << WK[k];
         if (b_down >> BTN_FX & 1u) {            /* (FX held: the eight tricks' keys glow; one on: lit; V2: GENERATE's
                                                  * eight black keys glow, T1 .. T4's lit while they generate) */
-            for (k = 0; k < 8u; k++) lit |= (k ? pf_held >> (k - 1u) & 1u : ge_freeze & 1u) << WK[k];
             for (k = 0; k < 4u; k++) lit |= (gen_on >> k & 1u) << BK[k];
         }
         for (k = 0; k < 27u; k++) {
@@ -2390,7 +2441,7 @@ static void app_main(void)
             for (bk = 0; bk < 8u && BK[bk] != k; bk++)
                 ;
             fm1_led_key(KEY_LED(k), lit >> k & 1u);
-            fm1_led_glow(KEY_LED(k), (wk < 8u || bk < 8u) && (b_down >> BTN_FX & 1u));
+            fm1_led_glow(KEY_LED(k), bk < 8u && (b_down >> BTN_FX & 1u));   /* (FX held: GENERATE's keys) */
         }
         fm1_led_key(BTN_OCT_DOWN, set.oct < 0);
         fm1_led_key(BTN_OCT_UP, set.oct > 0);

@@ -69,7 +69,7 @@ h = audio("hail", 0.6, 0.8)
 check(rms(h) > 300 and np.abs(audio("hail")).max() < 32767, f"HAIL: a hit, no clipping (rms {rms(h):.0f})")
 
 # KEYS: C3 and C4 an octave apart; 19 EDO: step 7
-PURE = [(440, f"btn {EDIT}"), (460, f"btn {EDIT}"), (480, f"enc {K1} -60"), (500, f"enc {K2} -60"), (520, f"enc {K4} -30")]   # DRUM 1: no sweep, no modes, no drive
+PURE = [(440, f"btn {EDIT}"), (480, f"enc {K1} -60"), (500, f"enc {K2} -60"), (520, f"enc {K4} -30")]   # DRUM 1 (EDIT's next after SOUND): no sweep, no modes, no drive
 
 
 def pitch(n, edo=12):
@@ -91,20 +91,20 @@ def snd(name, ev):
     run(name, src() + ev + hit(48), 1800)
     return audio(name, 0.6, 1.6)
 base = snd("d0", [])
-d1 = snd("d1", [(440, f"btn {EDIT}"), (460, f"btn {EDIT}"), (500, f"enc {K2} 60")])                  # DRUM 1: MATERIAL
-d2 = snd("d2", [(440, f"btn {EDIT}"), (460, f"btn {EDIT}"), (500, f"enc {K1} 60")])                  # TENSION
-d3 = snd("d3", [(440, f"btn {EDIT}"), (460, f"btn {EDIT}"), (500, f"enc {K4} 60")])                  # DRIVE
-d4 = snd("d4", [(440, f"btn {EDIT}"), (460, f"btn {EDIT}"), (480, f"btn {EDIT}"), (500, f"enc {K1} 60")])   # DRUM 2: PUNCH
+d1 = snd("d1", [(440, f"btn {EDIT}"), (500, f"enc {K2} 60")])                  # DRUM 1: MATERIAL
+d2 = snd("d2", [(440, f"btn {EDIT}"), (500, f"enc {K1} 60")])                  # TENSION
+d3 = snd("d3", [(440, f"btn {EDIT}"), (500, f"enc {K4} 60")])                  # DRIVE
+d4 = snd("d4", [(440, f"btn {EDIT}"), (460, f"btn {EDIT}"), (500, f"enc {K1} 60")])   # DRUM 2: PUNCH
 for nm, x in (("MATERIAL", d1), ("TENSION", d2), ("DRIVE", d3), ("PUNCH", d4)):
     check(rms(x - base) > 50, f"{nm} changes the sound (rms difference {rms(x - base):.0f})")
-w0 = snd("w0", [(440, f"btn {EDIT}"), (460, f"btn {EDIT}"), (480, f"btn {EDIT}"), (500, f"enc {K3} 127")])
-w1 = run("w1", src() + [(440, f"btn {EDIT}"), (460, f"btn {EDIT}"), (480, f"btn {EDIT}"), (500, f"enc {K3} 127")] + hit(48, 600) + hit(48, 1500) + hit(48, 2400), 3300)
+w0 = snd("w0", [(440, f"btn {EDIT}"), (460, f"btn {EDIT}"), (500, f"enc {K3} 127")])
+w1 = run("w1", src() + [(440, f"btn {EDIT}"), (460, f"btn {EDIT}"), (500, f"enc {K3} 127")] + hit(48, 600) + hit(48, 1500) + hit(48, 2400), 3300)
 x = audio("w1")
 ps = [f0(x[int(t * 44100):int((t + 0.7) * 44100)]) for t in (0.7, 1.6, 2.5)]
 check(len(set(round(p, 1) for p in ps)) > 1, f"WANDER: hits differ in pitch ({', '.join(f'{p:.1f}' for p in ps)})")
 
 # through BANK: HAIL is noise; a held C4 gives it a pitch
-ev = src(HAIL) + [(420, f"btn {LFO}"), (440, f"btn {LFO}"), (460, f"btn {LFO}"), (480, f"enc {K1} 1"), (500, f"enc {K2} 57"), (520, f"enc {K3} 37")]
+ev = src(HAIL) + [(340, "down 2"), (660, "up 2"), (670, "enc 0 1"), (680, f"enc {K1} 1"), (685, f"enc {K2} 57"), (690, f"enc {K3} 37")]   # FX held, SELECT: BANK
 run("bank", ev + hit(60, 700, 400), 2000)
 S = np.abs(np.fft.rfft(audio("bank", 0.7, 1.4), 1 << 18)); fr = np.fft.rfftfreq(1 << 18, 1 / 44100)
 pk = fr[np.argmax(S * (fr > 100) * (fr < 3000))]
@@ -112,7 +112,7 @@ check(abs(1200 * np.log2(pk / (440 * 2 ** ((60 - 69) / 12)))) % 1200 < 15 or abs
 
 # saved
 sv = OUT / "save.bin"
-run("save", src(HAIL) + [(440, f"btn {EDIT}"), (460, f"btn {EDIT}"), (500, f"enc {K2} 11")], 5000, {**os.environ, "GRIMM_SAVE_OUT": str(sv)})
+run("save", src(HAIL) + [(440, f"btn {EDIT}"), (500, f"enc {K2} 11")], 5000, {**os.environ, "GRIMM_SAVE_OUT": str(sv)})
 p = run("load", [(400, "probe")], 500, {**os.environ, "GRIMM_SAVE_IN": str(sv)})
 m = re.search(r" drum ([\d,]+)", p)
 check(m and m.group(1).startswith(f"8,{HAIL},") and m.group(1).split(",")[6] == "11", f"saved, power on: {m and m.group(1)}")
