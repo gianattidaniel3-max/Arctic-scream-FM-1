@@ -30,9 +30,9 @@
                                                  * Felucca's 1 << 12 rendered the last ~2.7 s of a 6 s release unheard) */
 enum { ST_OFF, ST_ATK, ST_SUS, ST_REL, ST_FADE };
 enum { ENG_VA, ENG_FM, ENG_SAMPLE, ENG_VOICE, ENG_WHEEL, ENG_PHYS, ENG_PHASE, ENG_HOWL, ENG_KICK, ENG_SNARE, ENG_CLAP,
-       ENG_TOM, ENG_HATS, NENG };               /* (Arctic Scream: the drums, a source each: drum.c) */
+       ENG_TOM, ENG_HATS, ENG_FMD, ENG_BELL, ENG_PART, ENG_WEIRD, NENG };   /* (1.4.8: FM DRUM, BELL, PARTICLE, WEIRD) */               /* (Arctic Scream: the drums, a source each: drum.c) */
 #define ENG_DRUM ENG_KICK                       /* (1.4's one DRUM source: its saves' 8, now KICK's) */
-static int eng_drum(int32_t e) { return e >= ENG_KICK && e <= ENG_HATS; }
+static int eng_drum(int32_t e) { return e >= ENG_KICK && e <= ENG_WEIRD; }
 
 typedef struct {
     volatile uint32_t req;                      /* main loop: + 1 after want_* */
@@ -78,7 +78,7 @@ typedef struct {
     volatile int32_t warp, morph;               /* HOME: WARP, MORPH 0..127 (chaos.c) */
     volatile int32_t bk_mode, bk_ring, bk_mix, bk_wind, bk_glacier;   /* BANK, BANK 2 (bank.c) */
 } track_t;
-#define TRK_DEF {ENG_VA, {{0, 10, 90, 30}, {0, 64, 64, 20}, {0, 0, 127, 0}, {0, 12, 64, 10}, {4, 0, 40, 0}, {0, 64, 80, 64}, {0, 0, 60, 0}, {96, 64, 50, 40}, {0, 58, 55, 110}, {0, 40, 50, 105}, {0, 55, 50, 105}, {0, 48, 60, 110}, {0, 80, 30, 80}}, 100, 0, 100, 0, 64, 0, \
+#define TRK_DEF {ENG_VA, {{0, 10, 90, 30}, {0, 64, 64, 20}, {0, 0, 127, 0}, {0, 12, 64, 10}, {4, 0, 40, 0}, {0, 64, 80, 64}, {0, 0, 60, 0}, {96, 64, 50, 40}, {0, 58, 55, 110}, {0, 40, 50, 105}, {0, 55, 50, 105}, {0, 48, 60, 110}, {0, 80, 30, 80}, {0, 30, 60, 110}, {0, 60, 70, 0}, {0, 70, 70, 110}, {0, 25, 60, 30}}, 100, 0, 100, 0, 64, 0, \
                  {60, 85, 51, 105}, 0, 0, 0, 0, 0, 4, 1, 50, 40, 30, 9, 0, 84, 24, 100, 0, 0, {{0}}}
 static track_t trk[NT] = {TRK_DEF, TRK_DEF, TRK_DEF, TRK_DEF};   /* VA: SAW, DETUNE 10, CUTOFF 90, RESONANCE 30
                                                  * (Felucca's ANALOG); FM: BELL as made, DETUNE 20; SAMPLE: slot 1,
@@ -159,7 +159,7 @@ static int16_t vx_pool[NV][VX_POOL] __attribute__((section(".pool")));
 #include "drum.c"                               /* the DRUM source: FNTSMG-1's models (fg/) */
 static const engine_t *const ENGINES[NENG] = {&VA_ENGINE, &FM_ENGINE, &SAMPLE_ENGINE, &FORMANT_ENGINE, &WHEEL_ENGINE,
                                               &PHYS_ENGINE, &PHASE_ENGINE, &HOWL_ENGINE, &KICK_ENGINE, &SNARE_ENGINE, &CLAP_ENGINE, &TOM_ENGINE,
-                                              &HATS_ENGINE};   /* (by ENG_) */
+                                              &HATS_ENGINE, &FMD_ENGINE, &BELL_ENGINE, &PART_ENGINE, &WEIRD_ENGINE};   /* (by ENG_) */
 
 /* (V2) GENERATE's notes (gen.c): a voice's volume (0: full; else x / 256) and attack (0: the track's ATTACK; else
  * GEN_ATK's k - 1), asked with the note (gen_vel, gen_atk: the next note_on's), taken as it begins */

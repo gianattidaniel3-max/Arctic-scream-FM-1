@@ -10,6 +10,10 @@ static void dm_kill(uint32_t t, uint32_t s)
     case DM_HAIL: v->h.kill = FG_DECAY[2]; break;
     case DM_KICK: v->k.kill = FG_DECAY[2]; break;
     case DM_SNARE: v->s.kill = FG_DECAY[2]; break;
+    case DM_FMD: v->f.kill = FG_DECAY[2]; break;
+    case DM_BELL: v->b.kill = 1; break;         /* (its partials fall fast: bell_render) */
+    case DM_PART: v->p.kill = FG_DECAY[2]; break;
+    case DM_WEIRD: v->w.kill = FG_DECAY[2]; break;
     default: v->c.kill = FG_DECAY[6]; break;    /* (a clap: as FNTSMG-1's, a little slower) */
     }
 }
@@ -72,6 +76,34 @@ static void dm_hit(uint32_t t, uint32_t note)
         dm[t].lvl[n] = dm_sq2(p[7]);
         break;
     }
+    case DM_FMD: {
+        pc_fmd_t *v = &dm[t].s[n].f;
+        v->seed = dm[t].seed + 1u;
+        fmd_trig(v, p, vel);
+        v->inc0 = pc_scale(v->inc0, f), v->inc = v->inc0;
+        break;
+    }
+    case DM_BELL: {
+        pc_bell_t *v = &dm[t].s[n].b;
+        v->seed = dm[t].seed + 1u;
+        bell_trig(v, p, vel);
+        for (k = 0; k < v->np; k++) v->inc[k] = pc_scale(v->inc[k], f);
+        break;
+    }
+    case DM_PART: {
+        pc_part_t *v = &dm[t].s[n].p;
+        v->seed = dm[t].seed + 1u;
+        part_trig(v, p, vel);
+        v->lf += p16 * 65536 / 192;             /* (the keys: its pitch, in octaves) */
+        break;
+    }
+    case DM_WEIRD: {
+        pc_weird_t *v = &dm[t].s[n].w;
+        v->seed = dm[t].seed + 1u;
+        weird_trig(v, p, vel);
+        v->base = (uint32_t)(((uint64_t)v->base * f) >> 16), v->sweep = (uint32_t)(((uint64_t)v->sweep * f) >> 16);
+        break;
+    }
     default: {
         fgm_hail_t *v = &dm[t].s[n].h;
         p[2] = (uint8_t)clamp((int32_t)p[2] + p16 * 341 / 1600, 0, 127);   /* (COLOR: 3.1 octaves in 127) */
@@ -89,6 +121,10 @@ static int dm_on(uint32_t t, uint32_t s)
     case DM_HAIL: return v->h.on;
     case DM_KICK: return v->k.on;
     case DM_SNARE: return v->s.on;
+    case DM_FMD: return v->f.on;
+    case DM_BELL: return v->b.on;
+    case DM_PART: return v->p.on;
+    case DM_WEIRD: return v->w.on;
     default: return v->c.on;
     }
 }
@@ -106,6 +142,10 @@ static void dm_run(uint32_t t, int32_t *x, uint32_t n)
         case DM_HAIL: hail_render(&v->h, x, n); break;
         case DM_KICK: sweep_render(&v->k, x, n); break;
         case DM_SNARE: voice_render(&v->s, dm[t].lvl[s], x, n); break;
+        case DM_FMD: fmd_render(&v->f, x, n); break;
+        case DM_BELL: bell_render(&v->b, x, n); break;
+        case DM_PART: part_render(&v->p, x, n); break;
+        case DM_WEIRD: weird_render(&v->w, x, n); break;
         default: clap_render(&v->c, dm[t].lvl[s], x, n); break;
         }
     }

@@ -192,7 +192,7 @@ North Sami names.
 | **ADSR** | ATTACK (~1 ms – 10 s) | DECAY (~10 ms – 10 s) | SUSTAIN (40 % to start) | RELEASE (~10 ms – 20 s) |
 | **AHD** | ATTACK | HOLD (0 – 2 s at the top) | DECAY (to silence) | |
 
-- **AHD** runs its course whether the key is held or not, and it also shapes the **drums** (KICK … HATS), which ADSR leaves alone.
+- **AHD** runs its course whether the key is held or not, and it also shapes the **drums** (KICK … WEIRD), which ADSR leaves alone.
 - With **LATCH ON** a note only stops when you press its key again, so ADSR's RELEASE starts only then.
 
 **LFO** (per track, two of them): **LFO 1, LFO 1 MODE, LFO 2, LFO 2 MODE** (SELECT or LFO again).
@@ -255,6 +255,21 @@ North Sami names.
   SOUND has its three main knobs, **DRUM 1** and **DRUM 2** the rest, and **KEYS** (the keys tune it, at the TUNING's
   pitches), **WANDER** (each hit's pitch off at random), **HUMAN** (each hit's level off at random). A new MODEL or preset
   sets its sound; KEYS, WANDER and HUMAN stay as they are. Saved with the project; a saved sound keeps MODEL and the three main knobs only.
+- **FM DRUM, BELL, PARTICLE, WEIRD** (four more drum sources, 1.4.8), the same way: PRESET first, then twenty presets each.
+  - **FM DRUM** (after Mutable Instruments Peaks): a sine whose pitch falls. SOUND: TONE, DECAY, LEVEL. DRUM 1: **FM** (how far
+    the pitch falls from), **NOISE**, **DRIVE**, **FEEDBACK** (its own sound on its pitch: growl). DRUM 2: **PUNCH** (a fast chirp
+    at the hit). Toms, zaps, lasers, metal kicks.
+  - **BELL** (after Mutable Instruments Braids' STRUCK BELL and STRUCK DRUM). SOUND: TONE, DECAY, **TYPE** (BELL: eleven
+    partials; DRUM: six, with ringing noise). DRUM 1: **SPREAD** (bell: partials detuned; drum: the noise's balance), **COLOR**
+    (bell: partials stretched or squeezed, from bell to metal; drum: brighter noise, more harmonics), **STRIKE** (a soft mallet
+    to a hard one), **CLICK**. DRUM 2: LEVEL. Gamelan, cowbell, glass, tabla, timpani.
+  - **PARTICLE** (after Mutable Instruments Plaits' PARTICLE): random clicks, each ringing a filter at a random pitch around
+    TONE; a hit is a burst. SOUND: TONE, DECAY, LEVEL. DRUM 1: **DENSITY**, **SPREAD** (how far the pitches scatter),
+    **RESO** (dry ticks to ringing pings), **GRIT** (the raw clicks too). DRUM 2: **FADE** (the clicks thin out as it dies:
+    rain stopping). Dust, crackle, shakers, rain.
+  - **WEIRD** (after WeirdDrums by Daniele Filaretti): a sine with a pitch sweep and an LFO on its pitch, plus filtered noise.
+    SOUND: TONE, DECAY, **MIX** (the sine to the noise). DRUM 1: **SWEEP**, **WOBBLE** (the LFO's depth), **RATE** (0.1 – 80 Hz:
+    slow vibrato to a buzz), **NOISE** (0 – 63: a low-pass opening; 64 – 127: a high-pass closing). DRUM 2: LEVEL.
 - **CHORD TYPE:** SCALE (the scale's triad), MIN, MAJ, SUS2, SUS4, FIFTH, MIN7, MAJ7, DIM, ADD9, CLUSTER, SCALE7 (the
   scale's four notes, 1-3-5-7), QUART3 and QUART4 (stacked fourths), QUINT (stacked fifths), HARM (harmonics 4:5:6:7, at
   each tuning's nearest steps).

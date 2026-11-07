@@ -140,6 +140,31 @@ m = re.search(r" drum ([\d,]+)", p)
 check(m and m.group(1).split(",")[1] == "4" and m.group(1).split(",")[2:5] == ["66", "30", "109"], f"PRESET to KICK HARD: its sound ({m and m.group(1)})")
 run("sn", src(21) + hit(48) + hit(48, 1400), 2500)
 check(rms(audio("sn", 1.4, 1.8)) > 200, "SNARE: a second hit")
+# (1.4.8) FM DRUM, BELL, PARTICLE, WEIRD: sources 13 .. 16, entries 105 .. 188
+for nm, e, lo in (("FM DRUM", 105, -14), ("FM DRUM PEAKS BD", 106, -14), ("BELL", 126, -14), ("BELL STRUCK DRUM", 127, -14),
+                  ("BELL SNARE DRUM", 139, -14), ("PARTICLE", 147, -16), ("PARTICLE RAIN", 149, -16), ("PARTICLE SWARM", 155, -16),
+                  ("WEIRD", 168, -14), ("WEIRD KICK", 169, -14), ("WEIRD GROWL", 173, -14)):
+    run(f"n{e}", src(e) + hit(48), 6000)
+    x = audio(f"n{e}", 0.6, 1.0)
+    db = 20 * np.log10(loud(x) / ref)
+    check(rms(audio(f"n{e}", 0.3, 0.59)) == 0 and rms(x) > 100 and np.abs(audio(f"n{e}")).max() < 32767 and rms(audio(f"n{e}", 5.5, 6.0)) < 5,
+          f"{nm}: a hit, no clipping, it dies away ({db:+.1f} dB to MEMBRANE)")
+    check(lo < db < 8, f"{nm}: level with the others ({db:+.1f} dB)")
+for nm, e, lo, hi in (("FM DRUM", 105, 30, 300), ("WEIRD KICK", 169, 20, 300), ("BELL STRUCK DRUM", 127, 40, 400)):   # (early: their tails are short)
+    run(f"k{e}", src(e) + hit(48), 1500); run(f"k{e}b", src(e) + hit(60), 1500)
+    a1, b1 = f0(audio(f"k{e}", 0.62, 0.72), lo, hi), f0(audio(f"k{e}b", 0.62, 0.72), lo * 2, hi * 2)
+    check(abs(1200 * np.log2(b1 / a1) - 1200) < 60, f"{nm}: KEYS, an octave up ({a1:.1f}, {b1:.1f} Hz)")
+run("pa", src(147) + hit(48), 1500); run("pb", src(147) + hit(48), 1500)
+check(rms(audio("pa", 0.6, 1.0)) > 50, "PARTICLE: its burst sounds")
+sv2 = OUT / "save2.bin"                              # an entry past 127 (WEIRD GROWL: 173): saved, power on, as it was
+run("save2", src(173) + [(440, f"btn {EDIT}"), (500, f"enc {K2} 9")], 5000, {**os.environ, "GRIMM_SAVE_OUT": str(sv2)})
+p = run("load2", [(400, "probe")], 500, {**os.environ, "GRIMM_SAVE_IN": str(sv2)})
+m = re.search(r" drum ([\d,]+)", p)
+check(m and m.group(1).startswith(f"{ENG_KICK + 8},5,"), f"saved, power on: WEIRD GROWL ({m and m.group(1)})")
+run("w2", src(173) + hit(48), 1500)
+run("w3", [(600, f"midi 0x90 48 100"), (700, f"midi 0x80 48 0")], 1500, {**os.environ, "GRIMM_SAVE_IN": str(sv2)})
+check(rms(audio("w3", 0.6, 1.0)) > 100, "... and it plays")
+
 if len(sys.argv) > 2:                               # a save from 1.4.0 (its HAIL: 1): HAIL
     p = run("v140", [(400, "probe")], 500, {**os.environ, "GRIMM_SAVE_IN": sys.argv[2]})
     m = re.search(r" drum ([\d,]+)", p)

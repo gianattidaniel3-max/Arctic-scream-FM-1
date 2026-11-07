@@ -111,7 +111,7 @@ static char *ui_3(char *s, uint32_t v) { s[0] = (char)('0' + v / 100u % 10u), s[
 static uint32_t ui_pc(int32_t v) { return ((uint32_t)clamp(v, 0, 127) * 100u + 63u) / 127u; }
 
 /* a source's short name (the HOME slabs: "T2 FM") */
-static const char *const SRC_CODE[NENG] = {"VA", "FM", "SA", "VO", "WH", "PH", "PD", "HW", "KK", "SN", "CP", "TM", "HH"};
+static const char *const SRC_CODE[NENG] = {"VA", "FM", "SA", "VO", "WH", "PH", "PD", "HW", "KK", "SN", "CP", "TM", "HH", "FD", "BL", "PT", "WD"};
 
 /* ---- the header */
 static char ui_hb[12], ui_hl[24], ui_hr[12];    /* the button, the left, the right */
@@ -1645,10 +1645,10 @@ static void pic_drum(void)                      /* DRUM: a hit, as ribbons falli
     char t[32], *e;
     while (l > 0 && amp < 46) l >>= 1, amp += 6;
     e = put_s(t, DM_NAME[md]);                  /* ("SNARE INDUSTRIAL"; a model as it comes: its name) */
-    if (en % DM_NPR) put_s(put_s(e, " "), DM_ENAME[en]);
+    if (en % DM_NPR) put_s(put_s(e, " "), DM_ENAME[md * DM_NPR + en % DM_NPR]);   /* (1.4.8: its own model's name, not KICK's) */
     ui_caption(t, dm_v[sel][5] ? "KEYS ON" : "KEYS OFF");
     for (j = 0; j < 3u; j++) {
-        uint32_t f = md == DM_HAIL || md == DM_CLAP ? 11u + j * 5u : 3u + j * 2u;   /* (the skins' slow rings; hail's and a clap's fast ones) */
+        uint32_t f = md == DM_HAIL || md == DM_CLAP || md == DM_PART || md == DM_BELL ? 11u + j * 5u : 3u + j * 2u;   /* (the skins' slow rings; hail's and a clap's fast ones) */
         for (i = 0; i < 55u; i++) {
             int32_t env = 64 - (int32_t)i * 64 * 40 / ((dk + 8) * 54);
             env = env < 0 ? 0 : env;
@@ -2134,7 +2134,8 @@ static void ui_pic_draw(void)
         case ENG_WHEEL: pic_wheel(); return;
         case ENG_PHYS: pic_phys(); return;
         case ENG_HOWL: pic_howl(); return;
-        case ENG_KICK: case ENG_SNARE: case ENG_CLAP: case ENG_TOM: case ENG_HATS: pic_drum(); return;
+        case ENG_KICK: case ENG_SNARE: case ENG_CLAP: case ENG_TOM: case ENG_HATS:
+        case ENG_FMD: case ENG_BELL: case ENG_PART: case ENG_WEIRD: pic_drum(); return;
         default: pic_phase(); return;
         }
     case PG_SOURCE: pic_source(); return;

@@ -47,7 +47,7 @@
 #define LOCK_PK 288u                            /* a track's step locks: 64 x the four values, 64 x 4 bits which */
 #define SLOT_LEN(tn, sq, lk) (4u + NT * ((tn) + (sq) + (lk)))   /* a slot: [0] used, its tracks, sequences, locks */
 #define SONG_PK 20u                             /* the song: its chain (16), MODE, the mutes and solos, TUNING (its steps; 0: 12), a TUNING's own scale + 1 | FIELD << 7 */
-#define FX2_PK 172u                             /* (V2, version 8) MASTER's four, DRIVE's four; (version 9) BANK: five a track; (10) DRUM: twelve; (11) the track's DRIVE: four a track; (12) ENV's MODE and AHD, LFO 2, the LFOs' MODE pages, EUCLID: twenty a track */
+#define FX2_PK 176u                             /* (V2, version 8) MASTER's four, DRIVE's four; (version 9) BANK: five a track; (10) DRUM: twelve; (11) the track's DRIVE: four a track; (12) ENV's MODE and AHD, LFO 2, the LFOs' MODE pages, EUCLID: twenty a track; (13, 1.4.8) the drum's whole entry: one a track */
 #define WORK_LEN(tn, sg, sq, lk, fm, fx) (NT * ((tn) + (sq) + (lk)) + 16u + 4u + (sg) + (fm) + (fx))   /* the working
                                                  * project: tracks, effects, tempo, slot, .., sequences, locks, the
                                                  * song, the FM patches, MASTER and DRIVE (an older version's sizes: sg
@@ -59,10 +59,10 @@
 #define OBJ_HDR 12u                             /* magic, the save count, type, version, length */
 #define OBJ_MAGIC 0x4B504441u                   /* "ADPK" (Arctic Scream p0larpatch's own: its tracks are longer than GR!MM's,
                                                  * so neither reads the other's saves; GR!MM's was "GRMK") */
-#define OBJ_VER 13u
+#define OBJ_VER 14u
 #define SLS_VER 6u                              /* the slots' stream (its layout as version 6's) */
-#define NOBJV 12u
-static const uint16_t OBJ_VERS[NOBJV][7] = {{13, TRK_PK, 20, 260, 288, FM_ALL, FX2_PK}, {12, TRK_PK, 20, 260, 288, FM_ALL, FX2_PK}, {11, TRK_PK, 20, 260, 288, FM_ALL, 92}, {10, TRK_PK, 20, 260, 288, FM_ALL, 76}, {9, TRK_PK, 20, 260, 288, FM_ALL, 28}, {8, TRK_PK, 20, 260, 288, FM_ALL, 8}, {7, TRK_PK, 20, 260, 288, FM_ALL, 0},
+#define NOBJV 13u
+static const uint16_t OBJ_VERS[NOBJV][7] = {{14, TRK_PK, 20, 260, 288, FM_ALL, FX2_PK}, {13, TRK_PK, 20, 260, 288, FM_ALL, 172}, {12, TRK_PK, 20, 260, 288, FM_ALL, 172}, {11, TRK_PK, 20, 260, 288, FM_ALL, 92}, {10, TRK_PK, 20, 260, 288, FM_ALL, 76}, {9, TRK_PK, 20, 260, 288, FM_ALL, 28}, {8, TRK_PK, 20, 260, 288, FM_ALL, 8}, {7, TRK_PK, 20, 260, 288, FM_ALL, 0},
                                             {6, 52, 20, 260, 288, 0, 0}, {5, 52, 20, 196, 0, 0, 0},
                                             {4, 52, 0, 196, 0, 0, 0}, {3, 48, 0, 196, 0, 0, 0},
                                             {2, 44, 0, 196, 0, 0, 0}};   /* the versions loaded, newest first: a
@@ -77,7 +77,7 @@ static const uint16_t OBJ_VERS[NOBJV][7] = {{13, TRK_PK, 20, 260, 288, FM_ALL, F
 enum { OBJ_WORK, OBJ_SLOTS };
 enum { CAT_DRONE, CAT_PAD, CAT_BELL, CAT_ORGAN, CAT_KEYS, CAT_BASS, CAT_TEXTURE, CAT_VOICE, CAT_OTHER, NCAT };
 static const char *const CAT_NAME[NCAT] = {"DRONE", "PAD", "BELL", "ORGAN", "KEYS", "BASS", "TEXTURE", "VOICE", "OTHER"};
-_Static_assert(NENG <= PK_ENG + 6u, "a save keeps every source's settings (the eighth, HOWL, at bytes 52..55)");
+_Static_assert(ENG_KICK <= PK_ENG + 1u, "a save keeps every source's settings (the eighth, HOWL, at bytes 52..55; the drums: the DRUM block)");
 _Static_assert(SND_N * SND_SIZE <= 4096u && OBJ_HDR + WORK_PK + 4u <= 4096u && 4u * SLOT_ALL <= SLS_N * SLS_P &&
                SAVE_NSECT >= 3u + SLS_N, "the save sectors");
 
@@ -582,7 +582,8 @@ static void pk_work(uint8_t *q)
     for (t = 0; t < NT; t++, q += 12) {         /* DRUM: SOUND's four, DRUM 1 and 2's eight */
         uint32_t de = eng_drum(trk[t].eng) ? (uint32_t)trk[t].eng : ENG_KICK;   /* (the track's drum, or KICK's) */
         for (k = 0; k < 4u; k++) q[k] = (uint8_t)clamp(trk[t].p[de][k], 0, 127);
-        q[0] = (uint8_t)(0x80u | ((de - ENG_KICK) * DM_NPR + (uint32_t)clamp(trk[t].p[de][0], 0, DM_NPR - 1)));   /* (its entry; 1.4.0's: 0 MEMBRANE, 1 HAIL) */
+        uint32_t en = (de - ENG_KICK) * DM_NPR + (uint32_t)clamp(trk[t].p[de][0], 0, DM_NPR - 1);
+        q[0] = (uint8_t)(0x80u | (en < 128u ? en : 0u));   /* (its entry; 1.4.0's: 0 MEMBRANE, 1 HAIL; 1.4.8's past 127: in (13)) */
         for (k = 0; k < DM_DEEP; k++) q[4u + k] = (uint8_t)clamp(dm_v[t][k], 0, 127);
     }
     for (t = 0; t < NT; t++, q += 4)            /* (11) the track's DRIVE */
@@ -599,6 +600,10 @@ static void pk_work(uint8_t *q)
             q[10u + i * 4u] = (uint8_t)clamp(lf_fade[t][i], 0, 127), q[11u + i * 4u] = (uint8_t)clamp(lf_sync[t][i], 0, 1);
         q[16] = (uint8_t)clamp(eu_hits[t], 0, 32), q[17] = (uint8_t)clamp(eu_steps[t], 1, 32), q[18] = (uint8_t)clamp(eu_rot[t], 0, 31);
         q[19] = (uint8_t)clamp(trk[t].lfo_dest, 0, NLFODEST - 1);
+    }
+    for (t = 0; t < NT; t++, q++) {             /* (13) the drum's whole entry + 1 (1.4.8's nine drums: past 127) */
+        uint32_t de = eng_drum(trk[t].eng) ? (uint32_t)trk[t].eng : ENG_KICK;
+        q[0] = (uint8_t)(1u + (de - ENG_KICK) * DM_NPR + (uint32_t)clamp(trk[t].p[de][0], 0, DM_NPR - 1));
     }
 }
 enum { UW_GLOBALS = 1, UW_CHAIN = 2 };
@@ -634,7 +639,9 @@ static void uk_work(const uint8_t *q, uint32_t f, const uint16_t *vs)   /* (f: U
         }
         for (t = 0; t < NT; t++) {              /* (DRUM; saved before it: as it comes) */
             const uint8_t *y = fx >= 76u ? x + 28u + t * 12u : 0;
+            const uint8_t *z = fx >= 176u ? x + 172u + t : 0;   /* ((13): the whole entry, 1.4.8 on) */
             int32_t en = !y ? 0 : y[0] & 0x80u ? clamp(y[0] & 0x7f, 0, NDENT - 1) : (int32_t)((y[0] ? DM_HAIL : DM_MEMB) * DM_NPR);
+            if (z && *z) en = clamp(*z - 1, 0, NDENT - 1);
             uint32_t de = ENG_KICK + (uint32_t)en / DM_NPR;   /* (1.4's DRUM, saved as 8: the source its entry's model is) */
             if (eng_drum(trk[t].eng)) trk[t].eng = (int32_t)de;
             dm_init(t), dm_def(t, (uint32_t)en);
@@ -714,7 +721,7 @@ static const uint8_t *obj_find(uint32_t type, const uint16_t **vs, uint32_t *s_o
                                                  * copy (its row of OBJ_VERS: vs; SLOTS: version 5 and before only) */
 {
     uint32_t v;
-    for (v = type == OBJ_SLOTS ? 2u : 0u; v < NOBJV; v++) {
+    for (v = type == OBJ_SLOTS ? 3u : 0u; v < NOBJV; v++) {
         const uint16_t *r = OBJ_VERS[v];
         uint32_t len = type == OBJ_WORK ? WORK_LEN(r[1], r[2], r[3], r[4], r[5], r[6]) : 4u * SLOT_LEN(r[1], r[3], r[4]);
         const uint8_t *f = obj_newest(type, len, r[0], s_out);
