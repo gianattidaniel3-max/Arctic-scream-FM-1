@@ -67,11 +67,11 @@ static void gen_tick(uint32_t t);               /* (gen.c: a tick of track t, fr
  * (SOUND's four through lk_m, as a voice reads them; the others written, their values kept, till the next step) */
 #define LK_N 96u                                /* locks a track (its pattern's), in all */
 typedef struct { uint8_t st, pid, v; } lock_t;   /* (st 0xFF: a free place) */
-static lock_t lk_e[NT][LK_N];
+static lock_t lk_e[NT][LK_N] __attribute__((section(".pool")));   /* (in the pool, zeroed at boot: .bss is full) */
 #define LK_ACT 8u                               /* a step's knobs written at once, at most */
-static volatile int32_t *lk_ptr[NT][LK_ACT];    /* audio: the knobs a step's locks hold now, */
-static int32_t lk_base[NT][LK_ACT];             /* .. their own values (given back) */
-static uint32_t lk_na[NT];
+static volatile int32_t *lk_ptr[NT][LK_ACT] __attribute__((section(".pool")));    /* audio: the knobs a step's locks hold now, */
+static int32_t lk_base[NT][LK_ACT] __attribute__((section(".pool")));             /* .. their own values (given back) */
+static uint32_t lk_na[NT] __attribute__((section(".pool")));
 static volatile int32_t *knob_param_t(uint32_t pg, uint32_t k, uint32_t t);   /* (grimm.c: a knob of track t's) */
 static int32_t lk_find(uint32_t t, uint32_t st, uint32_t pid)   /* the lock of step st on knob pid: its place, -1 none */
 {
