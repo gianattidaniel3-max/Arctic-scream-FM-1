@@ -95,8 +95,10 @@ static uint32_t lfo_inc(uint32_t t, uint32_t i) /* a control step's phase */
 {
     int32_t r = clamp(lf_get(t, i, 0u), 0, 127);
     if (lf_sync[t][i]) {                        /* SYNC: a cycle a note value: (bpm / 60) / (beats) a second */
-        uint64_t b = (uint64_t)LS_DIV[clamp(r, 0, NLSDIV - 1)];   /* (1/24 beats) */
-        return (uint32_t)((((uint64_t)lfo_bpm10 * 192u) << 32) / (b * 600u * 11025u));   /* (a control step:
+        uint32_t b = LS_DIV[clamp(r, 0, NLSDIV - 1)];   /* (1/24 beats) */
+        /* bpm10 192 2^32 / (b 600 11025) = (bpm10 32 2^32 / 1102500) / b: the divisors 32-bit (the chip divides
+         * 64 by 32 only: no __udivdi3) */
+        return (uint32_t)((((uint64_t)lfo_bpm10 * 32u) << 32) / 1102500u) / b;   /* (a control step:
                                                  * 8 / 11025 s at 44.1 kHz, CTL 32) */
     }
     r = lfo_mv1(t, i ^ 1u, LD_ORATE, r, 127);   /* (the other LFO on its RATE) */

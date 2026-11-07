@@ -1769,7 +1769,7 @@ static void pic_euc(void)                       /* EUCLID: its STEPS round a rin
     put_s(put_u(put_s(put_u(l, (uint32_t)clamp(eu_hits[sel], 0, (int32_t)n)), " OF "), n), trk[sel].arp ? "  ON" : "  OFF (HOLD ARP)");
     ui_caption(l, 0);
     for (i = 0; i < n; i++) {
-        uint32_t ph = (uint32_t)(((uint64_t)i << 32) / n);
+        uint32_t ph = i * (0xFFFFFFFFu / n);   /* (32-bit divide: no __udivdi3) */
         int32_t x = PX0 + 106 + (sine_i(ph) * 46) / 32767, y = PY0 + 66 - (sine_i(ph + 0x40000000u) * 46) / 32767;
         int h = eu_hit(sel, i);
         uint16_t c = trk[sel].arp && arp[sel].n && i == cur % n ? ui_acc : h ? UI_KC[0] : UI_M0;
